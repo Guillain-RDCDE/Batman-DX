@@ -155,12 +155,12 @@ What has **not** been verified: the game on real hardware, and a full playthroug
 ## Checksums of the produced games
 
 ```
-2666c2514a39fedb6912cfab656debc7eda92561  Batman-DX.gbc (published edition)
-b4693564ef1f7dbad8819d8911e533a9929326d3  Batman-DX-movie.gbc
-34d27c6a76a9dc8596b1f301adb69c92726d8481  Batman-DX-comic.gbc
-e5b16dcb0e188d03ad91d5ca1e2201a8494142c9  Batman-DX-pastel.gbc
-cb148e1b984903578a066a166597204c2fa5fdd3  Batman-DX-night.gbc
-78ba7d9ca8b4180b314f0568bba53e084e41243c  Batman-DX-green.gbc
+a4e311126c7e8202fcbc2aeb27477aaa936bcd29  Batman-DX.gbc (published edition)
+a0882587f9d52532874aa473137beace62076c5e  Batman-DX-movie.gbc
+19e8e159464cb8cfec0073e5f5f4490273ccef12  Batman-DX-comic.gbc
+6568a323b72b4c9dfd5c8f707239cf37a4653090  Batman-DX-pastel.gbc
+065afd06fdcd98147286a2c214b86b732a0fe5bc  Batman-DX-night.gbc
+5d6479bb7e0b767a9ffad8c9f2aabf36502f2bd5  Batman-DX-green.gbc
 ```
 
 ## Building from source
