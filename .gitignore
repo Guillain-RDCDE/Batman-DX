@@ -1,0 +1,8 @@
+*.gb
+*.gbc
+!docs/*.js
+build/
+out/
+rom/
+__pycache__/
+.DS_Store
