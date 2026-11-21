@@ -18,7 +18,7 @@ The original game uses four shades of grey. Batman DX gives it color without tou
 
 Nothing is uploaded: everything happens in your browser.
 
-![The lab](images/lab.png)
+<p align="center"><img src="images/lab.png" alt="The lab"></p>
 
 ### The editor
 
@@ -30,7 +30,7 @@ The lab is also an editor. It reads the levels and drawings straight from your R
 
 Then try the result in the page, download your own game or patch, and export your settings to share them.
 
-![The editor](images/editor.png)
+<p align="center"><img src="images/editor.png" alt="The editor"></p>
 
 ## With an IPS patch
 
@@ -47,77 +47,77 @@ Original on the left, Batman DX on the right, at the same moment of the game.
 
 **The logo**
 
-![The logo](images/before-after-01-logo.png)
+<p align="center"><img src="images/before-after-01-logo.png" alt="The logo"></p>
 
 **Title screen**
 
-![Title screen](images/before-after-02-title.png)
+<p align="center"><img src="images/before-after-02-title.png" alt="Title screen"></p>
 
 **Scene: the police**
 
-![Scene: the police](images/before-after-03-scene-police.png)
+<p align="center"><img src="images/before-after-03-scene-police.png" alt="Scene: the police"></p>
 
 **Gotham City (1-1, 2-1)**
 
-![Gotham City (1-1, 2-1)](images/before-after-04-gotham.png)
+<p align="center"><img src="images/before-after-04-gotham.png" alt="Gotham City (1-1, 2-1)"></p>
 
 **Chemical plant (1-2, 1-3)**
 
-![Chemical plant (1-2, 1-3)](images/before-after-05-chemical-plant.png)
+<p align="center"><img src="images/before-after-05-chemical-plant.png" alt="Chemical plant (1-2, 1-3)"></p>
 
 **Batman vs Jack (1-B)**
 
-![Batman vs Jack (1-B)](images/before-after-06-jack.png)
+<p align="center"><img src="images/before-after-06-jack.png" alt="Batman vs Jack (1-B)"></p>
 
 **Scene: the Joker**
 
-![Scene: the Joker](images/before-after-07-scene-joker.png)
+<p align="center"><img src="images/before-after-07-scene-joker.png" alt="Scene: the Joker"></p>
 
 **Flugelheim Museum (2-2, 2-3)**
 
-![Flugelheim Museum (2-2, 2-3)](images/before-after-08-museum.png)
+<p align="center"><img src="images/before-after-08-museum.png" alt="Flugelheim Museum (2-2, 2-3)"></p>
 
 **Scene: the Batmobile**
 
-![Scene: the Batmobile](images/before-after-09-scene-batmobile.png)
+<p align="center"><img src="images/before-after-09-scene-batmobile.png" alt="Scene: the Batmobile"></p>
 
 **Batwing, sunset (3-1)**
 
-![Batwing, sunset (3-1)](images/before-after-10-batwing.png)
+<p align="center"><img src="images/before-after-10-batwing.png" alt="Batwing, sunset (3-1)"></p>
 
 **Batwing, night (3-2)**
 
-![Batwing, night (3-2)](images/before-after-11-batwing-night.png)
+<p align="center"><img src="images/before-after-11-batwing-night.png" alt="Batwing, night (3-2)"></p>
 
 **Scene: the Joker on screen**
 
-![Scene: the Joker on screen](images/before-after-12-scene-joker-on-screen.png)
+<p align="center"><img src="images/before-after-12-scene-joker-on-screen.png" alt="Scene: the Joker on screen"></p>
 
 **Cathedral (4-1, 4-2)**
 
-![Cathedral (4-1, 4-2)](images/before-after-13-cathedral.png)
+<p align="center"><img src="images/before-after-13-cathedral.png" alt="Cathedral (4-1, 4-2)"></p>
 
 **Batman vs the Joker (4-B)**
 
-![Batman vs the Joker (4-B)](images/before-after-14-bell-tower.png)
+<p align="center"><img src="images/before-after-14-bell-tower.png" alt="Batman vs the Joker (4-B)"></p>
 
 **Scene: the ending**
 
-![Scene: the ending](images/before-after-15-scene-ending.png)
+<p align="center"><img src="images/before-after-15-scene-ending.png" alt="Scene: the ending"></p>
 
 **End credits**
 
-![End credits](images/before-after-16-credits.png)
+<p align="center"><img src="images/before-after-16-credits.png" alt="End credits"></p>
 
 **Game Over**
 
-![Game Over](images/before-after-17-game-over.png)
+<p align="center"><img src="images/before-after-17-game-over.png" alt="Game Over"></p>
 
 ## Six moods
 
 `Batman-DX.ips` is the published edition: a mix chosen place by place. The five others apply a single mood to the whole game.
 
-![The six moods](images/moods.png)
+<p align="center"><img src="images/moods.png" alt="The six moods"></p>
 
 | Patch | Mood |
 |---|---|
@@ -130,7 +130,7 @@ Original on the left, Batman DX on the right, at the same moment of the game.
 
 ## The details that matter
 
-![Details](images/details.png)
+<p align="center"><img src="images/details.png" alt="Details"></p>
 
 - **Objects have transparent edges.** Barrels, pipes, blocks and pickups sit on the scenery with no colored square around them. To get there, about a hundred small drawings of the game are retouched at display time, on color hardware only.
 - **Gotham's windows are lit**, and the distant towers are drawn as outlines on the sky so they recede.
@@ -141,7 +141,7 @@ Original on the left, Batman DX on the right, at the same moment of the game.
 
 A whole level, for scale:
 
-![Level 1-1 in full](images/level-1-1-full.png)
+<p align="center"><img src="images/level-1-1-full.png" alt="Level 1-1 in full"></p>
 
 ## What has been verified
 

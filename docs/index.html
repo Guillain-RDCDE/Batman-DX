@@ -5,111 +5,149 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Batman DX — lab</title>
 <style>
-:root{--gold:#ffd21a;--bg:#0e0e14;--cardbg:#1b1b25;--border:#3a3a4a;--txt:#e8e8f0;--softc:#a9a9bb}
+:root{--bg:#0c0c0e;--panel:#141417;--line:#26262c;--txt:#e9e9ec;--mute:#8b8b95;--gold:#f5c518}
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--txt);font:16px/1.45 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif;margin:0;padding:14px;max-width:1080px;margin:auto}
-h1{color:var(--gold);font-size:26px;margin:6px 0 2px} h2{color:var(--gold);font-size:18px;margin:0 0 8px}
-p{margin:6px 0} .soft{color:var(--softc);font-size:14px} a{color:var(--gold)}
-.card{background:var(--cardbg);border:1px solid var(--border);border-radius:12px;padding:14px;margin:12px 0}
-button,select,.filebtn{font:inherit;font-size:15px;padding:9px 13px;border-radius:9px;border:1px solid var(--border);background:#2a2a36;color:var(--txt);margin:3px;cursor:pointer}
-button.go{background:var(--gold);color:#000;font-weight:700;border-color:var(--gold)}
-button:disabled{opacity:.4;cursor:default}
-#dropzone{border:2px dashed var(--border);border-radius:12px;padding:22px;text-align:center}
-#dropzone.over{border-color:var(--gold);background:#24242f}
-#status{font-weight:600} .ok{color:#7be08a} .ko{color:#ff7b7b}
-.game{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:center}
-canvas#lcd{image-rendering:pixelated;width:min(92vw,480px);aspect-ratio:160/144;background:#000;border:3px solid #333;border-radius:8px}
-.gamepad{user-select:none;-webkit-user-select:none;touch-action:manipulation;text-align:center}
-.pad{display:inline-grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);vertical-align:middle;margin:6px 16px}
-.k{background:#2a2a36;border:1px solid #555;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:17px}
-.k.on{background:var(--gold);color:#000}
-.ab{display:inline-block;vertical-align:middle;margin:6px 16px} .ab .k{display:inline-flex;width:62px;height:62px;border-radius:50%;margin:4px}
-.mid .k{display:inline-flex;padding:8px 14px;margin:4px;font-size:13px}
-#pals{display:flex;flex-wrap:wrap;gap:8px}
-.pal{background:#22222c;border:1px solid var(--border);border-radius:9px;padding:6px}
-.pal b{display:block;font-size:12px;color:var(--softc);margin-bottom:4px}
-.pal input{width:38px;height:38px;padding:0;border:1px solid #000;background:none;cursor:pointer}
-.lang{float:right}
-.scroller{overflow:auto;border:1px solid var(--border);border-radius:8px;margin:8px 0;background:#000;-webkit-overflow-scrolling:touch}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:1160px;margin:0 auto;padding:0 20px 48px}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 0;border-bottom:1px solid var(--line)}
+.mark{font-weight:700;letter-spacing:.14em;font-size:14px}
+.mark i{font-style:normal;color:var(--gold)}
+.lang button{border:0;background:none;color:var(--mute);font:inherit;font-size:13px;padding:4px 6px;cursor:pointer}
+.lang button:hover{color:var(--txt)}
+h2{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0 0 12px}
+p{margin:6px 0}
+.soft{color:var(--mute);font-size:13px}
+a{color:var(--txt)}
+button,select,.filebtn{font:inherit;font-size:14px;height:36px;padding:0 14px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--txt);cursor:pointer;display:inline-flex;align-items:center;vertical-align:middle}
+select{padding-right:8px;max-width:100%}
+button:hover,.filebtn:hover,select:hover{border-color:#3a3a44}
+button.go{background:var(--gold);border-color:var(--gold);color:#000;font-weight:600}
+button.go:hover{filter:brightness(1.06)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.card{padding:28px 0;border-bottom:1px solid var(--line);min-width:0}
+#dropzone{border:1px dashed #3a3a44;border-radius:10px;padding:36px 20px;text-align:center;background:var(--panel)}
+#dropzone.over{border-color:var(--gold)}
+#dropzone p{margin:0 0 14px}
+#status{font-size:13px;margin:14px 0 0}
+#c1.done #dropzone{padding:14px 16px;display:flex;align-items:center;gap:14px;text-align:left}
+#c1.done #dropzone p[data-t=drop],#c1.done .soft[data-t=privacy]{display:none}
+#c1.done #status{margin:0}
+.ok{color:#7ad68a}.ko{color:#ff8a80}
+#sha{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--mute);margin-top:10px;word-break:break-all}
+.work{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:40px}
+.work>.card{border-bottom:0}
+@media(max-width:900px){.work{grid-template-columns:minmax(0,1fr);gap:0}.work>.card{border-bottom:1px solid var(--line)}}
+canvas#lcd{image-rendering:pixelated;width:100%;max-width:440px;aspect-ratio:160/144;background:#000;border-radius:6px;display:block}
+.gamepad{user-select:none;-webkit-user-select:none;touch-action:manipulation;margin-top:16px}
+.padrow{display:flex;justify-content:space-between;align-items:center;max-width:440px}
+.pad{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px)}
+.k{background:var(--panel);border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--mute)}
+.k.on{background:var(--gold);border-color:var(--gold);color:#000}
+.ab{display:flex;gap:10px}.ab .k{width:54px;height:54px;border-radius:50%;font-size:15px;color:var(--txt)}
+.mid{display:flex;gap:8px;justify-content:center;max-width:440px;margin-top:10px}.mid .k{height:28px;padding:0 12px;font-size:11px;letter-spacing:.08em}
+#pals{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px 18px;margin:16px 0}
+.pal{display:flex;align-items:center;gap:6px}
+.pal b{font-weight:400;font-size:12px;color:var(--mute);width:74px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pal input{-webkit-appearance:none;appearance:none;width:26px;height:26px;padding:0;border:0;border-radius:4px;background:none;cursor:pointer}
+.pal input::-webkit-color-swatch-wrapper{padding:0}
+.pal input::-webkit-color-swatch{border:1px solid #000;border-radius:4px}
+.pal input::-moz-color-swatch{border:1px solid #000;border-radius:4px}
+.scroller{overflow:auto;border-radius:6px;margin:10px 0;background:#000;-webkit-overflow-scrolling:touch}
 #preview{image-rendering:pixelated;display:block;cursor:crosshair}
-#zoom,#result{image-rendering:pixelated;border:1px solid #555;margin:3px;cursor:pointer}
-.cols{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;background:#22222c;border:1px solid var(--border);border-radius:9px;padding:10px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start;padding:16px;margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+@media(max-width:560px){.cols{grid-template-columns:1fr}}
+.cols b{font-weight:600}
+#zoom,#result{image-rendering:pixelated;border-radius:4px;cursor:pointer;display:block;width:144px;height:144px;margin-bottom:8px}
+.actions{margin-top:18px}
+#warn{font-size:13px;margin-top:8px}
+footer{padding:22px 0;color:var(--mute);font-size:12px}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
-<div class="lang"><button id="bfr">FR</button><button id="ben">EN</button></div>
-<h1>Batman DX</h1>
-<p class="soft" data-t="tagline"></p>
+<div class="wrap">
+<header>
+  <div class="mark">BATMAN <i>DX</i></div>
+  <div class="lang"><button id="bfr">FR</button><button id="ben">EN</button></div>
+</header>
 
-<div class="card">
+<section class="card" id="c1">
   <h2 data-t="t1"></h2>
   <div id="dropzone">
     <p data-t="drop"></p>
     <label class="filebtn"><span data-t="choose"></span><input type="file" id="f" accept=".gb,.gbc,.bin" hidden></label>
     <p id="status" class="soft" data-t="waiting"></p>
   </div>
-  <p class="soft" data-t="privacy"></p>
-</div>
+  <p class="soft" data-t="privacy" style="margin-top:12px"></p>
+</section>
 
-<div class="card" id="c2" hidden>
+<section class="card" id="c2" hidden>
   <h2 data-t="t2"></h2>
-  <select id="mood"></select>
-  <button class="go" id="dlrom" data-t="dlrom"></button>
-  <button id="dlips" data-t="dlips"></button>
-  <p class="soft" id="sha"></p>
-</div>
+  <div class="row">
+    <select id="mood"></select>
+    <button class="go" id="dlrom" data-t="dlrom"></button>
+    <button id="dlips" data-t="dlips"></button>
+  </div>
+  <p id="sha"></p>
+</section>
 
-<div class="card" id="c3" hidden>
+<div class="work">
+<section class="card" id="c3" hidden>
   <h2 data-t="t3"></h2>
-  <div class="game">
-    <canvas id="lcd" width="160" height="144"></canvas>
-    <div class="gamepad">
-      <div><div class="pad">
+  <canvas id="lcd" width="160" height="144"></canvas>
+  <div class="gamepad">
+    <div class="padrow">
+      <div class="pad">
         <span></span><div class="k" data-k="UP">▲</div><span></span>
         <div class="k" data-k="LEFT">◀</div><span></span><div class="k" data-k="RIGHT">▶</div>
         <span></span><div class="k" data-k="DOWN">▼</div><span></span></div>
-        <div class="ab"><div class="k" data-k="B">B</div><div class="k" data-k="A">A</div></div></div>
-      <div class="mid"><div class="k" data-k="SELECT">SELECT</div><div class="k" data-k="START">START</div></div>
-      <p class="soft" data-t="keyshelp"></p>
-      <button id="restart" data-t="restart"></button>
+      <div class="ab"><div class="k" data-k="B">B</div><div class="k" data-k="A">A</div></div>
     </div>
+    <div class="mid"><div class="k" data-k="SELECT">SELECT</div><div class="k" data-k="START">START</div></div>
   </div>
-</div>
+  <p class="soft" data-t="keyshelp" style="margin-top:14px"></p>
+  <button id="restart" data-t="restart" style="margin-top:8px"></button>
+</section>
 
-<div class="card" id="c4" hidden>
+<section class="card" id="c4" hidden>
   <h2 data-t="t4"></h2>
-  <p class="soft" data-t="labhelp"></p>
-  <select id="scene"></select>
-  <select id="what"><option value="bg" data-t="bgopt"></option><option value="obj" data-t="charopt"></option></select>
-  <div id="pals" style="margin:10px 0"></div>
+  <div class="row">
+    <select id="scene"></select>
+    <select id="what"><option value="bg" data-t="bgopt"></option><option value="obj" data-t="charopt"></option></select>
+  </div>
+  <div id="pals"></div>
   <div id="view" hidden>
-    <select id="stagesel"></select> <span class="soft" data-t="taphint"></span>
+    <div class="row"><select id="stagesel"></select><span class="soft" data-t="taphint"></span></div>
     <div class="scroller"><canvas id="preview"></canvas></div>
     <div id="toolbox" hidden>
       <div class="cols">
         <div>
-          <b id="tiletitle"></b>
-          <p><span data-t="tilepallbl"></span> <select id="tilepal"></select></p>
-          <p><button id="bgpal" data-t="bgpal"></button></p>
-          <p class="soft" data-t="edgehelp"></p>
-          <p><button id="detect" data-t="detect"></button>
-             <select id="inside"><option value="0" data-t="m0"></option><option value="1" data-t="m1"></option><option value="2" data-t="m2"></option></select></p>
-          <p><button class="go" id="apply" data-t="apply"></button> <button id="remove" data-t="remove"></button></p>
-          <p id="room" class="soft"></p>
+          <p><b id="tiletitle"></b></p>
+          <div class="row"><span class="soft" data-t="tilepallbl"></span><select id="tilepal"></select><button id="bgpal" data-t="bgpal"></button></div>
+          <p class="soft" data-t="edgehelp" style="margin:14px 0 8px"></p>
+          <div class="row"><button id="detect" data-t="detect"></button>
+            <select id="inside"><option value="0" data-t="m0"></option><option value="1" data-t="m1"></option><option value="2" data-t="m2"></option></select></div>
+          <div class="row" style="margin-top:8px"><button class="go" id="apply" data-t="apply"></button><button id="remove" data-t="remove"></button></div>
+          <p id="room" class="soft" style="margin-top:10px"></p>
         </div>
-        <div><canvas id="zoom" width="192" height="192"></canvas><br><canvas id="result" width="192" height="192"></canvas></div>
+        <div><canvas id="zoom" width="192" height="192"></canvas><canvas id="result" width="192" height="192"></canvas></div>
       </div>
     </div>
   </div>
-  <p style="margin-top:10px">
-  <button class="go" id="tryit" data-t="tryit"></button>
-  <button id="exportbtn" data-t="exportbtn"></button>
-  <label class="filebtn"><span data-t="importlbl"></span><input type="file" id="importfile" accept=".json" hidden></label>
-  <button id="reset" data-t="reset"></button></p>
+  <div class="row actions">
+    <button class="go" id="tryit" data-t="tryit"></button>
+    <button id="exportbtn" data-t="exportbtn"></button>
+    <label class="filebtn"><span data-t="importlbl"></span><input type="file" id="importfile" accept=".json" hidden></label>
+    <button id="reset" data-t="reset"></button>
+  </div>
   <p id="warn" class="ko"></p>
+  <p class="soft" data-t="labhelp" style="margin-top:14px"></p>
+</section>
 </div>
 
-<p class="soft" data-t="footer"></p>
+<footer data-t="footer"></footer>
+</div>
 
 <script src="wasmboy.wasm.iife.js"></script>
 <script>
@@ -117,41 +155,41 @@ canvas#lcd{image-rendering:pixelated;width:min(92vw,480px);aspect-ratio:160/144;
 // ---------------------------------------------------------------- interface texts (French / English)
 const T={fr:{
  tagline:"Le Batman Game Boy de 1990, colorisé. Déposez votre ROM, repartez avec le jeu en couleur.",
- t1:"1. Votre ROM d'origine", drop:"Glissez ici votre fichier « Batman - The Video Game (World).gb », ou :", choose:"Choisir le fichier",
- waiting:"Aucun fichier pour l'instant.", privacy:"Rien n'est envoyé sur Internet : tout se passe dans votre navigateur. La ROM n'est pas fournie.",
- t2:"2. Choisir l'ambiance et télécharger", dlrom:"Télécharger le jeu en couleur (.gbc)", dlips:"Télécharger le patch (.ips)",
- t3:"3. Essayer tout de suite", keyshelp:"Clavier : flèches, X = A (saut), W ou Z = B (tir), Entrée = START, Maj = SELECT.", restart:"Relancer le jeu",
- t4:"4. L'atelier : vos propres couleurs", bgopt:"Décor", charopt:"Personnages", reset:"Revenir à l'ambiance choisie",
- footer:"Batman DX est un patch de fan, sans lien avec Sunsoft, Nintendo, DC ou Warner. Batman est une marque de DC.",
+ t1:"ROM d'origine", drop:"Déposez ici « Batman - The Video Game (World).gb »", choose:"Choisir un fichier",
+ waiting:"Aucun fichier.", privacy:"Tout se passe dans votre navigateur. Aucun fichier n'est envoyé, aucune ROM n'est fournie.",
+ t2:"Ambiance", dlrom:"Télécharger le jeu (.gbc)", dlips:"Patch (.ips)",
+ t3:"Jouer", keyshelp:"Flèches · X saut · Z ou W tir · Entrée START · Maj SELECT", restart:"Relancer",
+ t4:"Éditeur", bgopt:"Décor", charopt:"Personnages", reset:"Réinitialiser",
+ footer:"Patch de fan, sans lien avec Sunsoft, Nintendo, DC ou Warner Bros. Batman est une marque de DC.",
  good:"ROM reconnue : c'est la bonne.", wrong:"Ce n'est pas la ROM attendue. Il faut « Batman - The Video Game (World) », 131 072 octets.", already:"Ce fichier est déjà un Batman DX : donnez plutôt la ROM d'origine.",
  checksum:"Empreinte SHA-1 du jeu produit : ", statusbar:"barre d'état", pal:"Palette ", running:"en marche", loading:"chargement…",
- taphint:"Touchez un élément du décor pour le régler.", tilepallbl:"Palette de cette tuile :", bgpal:"Donner à cette palette la couleur du fond (teinte la plus claire)",
- edgehelp:"Bords transparents : en haut le dessin d'origine. Les points entourés d'or sont « le fond » ; touchez un point clair pour le basculer. En bas, le résultat.",
- detect:"Détecter le fond", m0:"le reflet rejoint la teinte suivante", m1:"tout descend d'un cran", m2:"reflet et corps descendent, contour gardé",
- apply:"Appliquer la retouche", remove:"Retirer la retouche", tile:"Tuile ", retouched:" (retouchée)", full:"Plus de place dans la cartouche pour d'autres retouches : retirez-en une.",
+ taphint:"Touchez un élément du décor.", tilepallbl:"Palette", bgpal:"Teinte claire = fond",
+ edgehelp:"Bords transparents : touchez les points clairs qui font partie du fond (entourés d'or). Résultat en dessous.",
+ detect:"Détecter", m0:"reflet fondu", m1:"tout d'un cran", m2:"contour gardé",
+ apply:"Appliquer", remove:"Retirer", tile:"Tuile ", retouched:" (retouchée)", full:"Plus de place dans la cartouche pour d'autres retouches : retirez-en une.",
  free:"Place libre pour les retouches : ", bytes:" octets", level:"Étape ", screen:"Écran",
- labhelp:"Choisissez un lieu et changez ses couleurs. Dans les niveaux et les scènes, touchez un élément pour choisir sa palette ou lui donner des bords transparents. Puis « Essayer mes réglages ». Le téléchargement ci-dessus reprend vos réglages.",
- tryit:"Essayer mes réglages", exportbtn:"Exporter mes réglages (.json)", importlbl:"Importer des réglages",
+ labhelp:"Les réglages sont repris dans le jeu et le patch téléchargés.",
+ tryit:"Essayer", exportbtn:"Exporter", importlbl:"Importer",
  mood:{dx:"Batman DX (l'édition publiée)",movie:"Film 1989",comic:"Bande dessinée",pastel:"Pastel",night:"Gotham la nuit",green:"Game Boy vert"},
  sc:["Écrans de texte, Game Over","Logo et écran-titre","Gotham City (1-1, 2-1)","Usine chimique (1-2, 1-3)","Batman contre Jack (1-B)","Musée Flugelheim (2-2, 2-3)","Batwing, coucher de soleil (3-1)","Batwing, nuit (3-2)","Cathédrale (4-1, 4-2)","Batman contre le Joker (4-B)","Scène : la police","Scène : le Joker","Scène : le Joker à l'écran","Scène : la fin","Scène : la Batmobile","Générique de fin"],
  ob:["Batman","Tirs, objets","Ennemis A","Ennemis B","Ennemis C","Éclat (boss)","Éclat","Éclat"]
 },en:{
  tagline:"The 1990 Game Boy Batman, colorized. Drop your ROM, leave with the game in color.",
- t1:"1. Your original ROM", drop:"Drop your “Batman - The Video Game (World).gb” file here, or:", choose:"Choose file",
- waiting:"No file yet.", privacy:"Nothing is uploaded: everything happens in your browser. The ROM is not provided.",
- t2:"2. Pick a mood and download", dlrom:"Download the color game (.gbc)", dlips:"Download the patch (.ips)",
- t3:"3. Try it right now", keyshelp:"Keyboard: arrows, X = A (jump), W or Z = B (fire), Enter = START, Shift = SELECT.", restart:"Restart the game",
- t4:"4. The lab: your own colors", bgopt:"Background", charopt:"Characters", reset:"Back to the chosen mood",
- footer:"Batman DX is a fan patch, not affiliated with Sunsoft, Nintendo, DC or Warner. Batman is a trademark of DC.",
+ t1:"Original ROM", drop:"Drop “Batman - The Video Game (World).gb” here", choose:"Choose a file",
+ waiting:"No file yet.", privacy:"Everything runs in your browser. Nothing is uploaded, no ROM is provided.",
+ t2:"Mood", dlrom:"Download the game (.gbc)", dlips:"Patch (.ips)",
+ t3:"Play", keyshelp:"Arrows · X jump · Z or W fire · Enter START · Shift SELECT", restart:"Restart",
+ t4:"Editor", bgopt:"Background", charopt:"Characters", reset:"Reset",
+ footer:"Fan patch, not affiliated with Sunsoft, Nintendo, DC or Warner Bros. Batman is a trademark of DC.",
  good:"ROM recognized: this is the right one.", wrong:"This is not the expected ROM. You need “Batman - The Video Game (World)”, 131,072 bytes.", already:"This file is already a Batman DX: please give the original ROM instead.",
  checksum:"SHA-1 of the produced game: ", statusbar:"status bar", pal:"Palette ", running:"running", loading:"loading…",
- taphint:"Tap any piece of scenery to adjust it.", tilepallbl:"Palette of this tile:", bgpal:"Give this palette the background color (lightest shade)",
- edgehelp:"Transparent edges: the original drawing is on top. Dots circled in gold are “background”; tap a light dot to toggle it. The result is below.",
- detect:"Detect the background", m0:"the highlight joins the next shade", m1:"everything moves down one shade", m2:"highlight and body move down, outline kept",
- apply:"Apply the retouch", remove:"Remove the retouch", tile:"Tile ", retouched:" (retouched)", full:"No room left in the cartridge for more retouches: remove one.",
+ taphint:"Tap any piece of scenery.", tilepallbl:"Palette", bgpal:"Lightest shade = background",
+ edgehelp:"Transparent edges: tap the light dots that belong to the background (circled in gold). Result below.",
+ detect:"Detect", m0:"highlight merged", m1:"all one shade down", m2:"outline kept",
+ apply:"Apply", remove:"Remove", tile:"Tile ", retouched:" (retouched)", full:"No room left in the cartridge for more retouches: remove one.",
  free:"Free room for retouches: ", bytes:" bytes", level:"Stage ", screen:"Screen",
- labhelp:"Pick a place and change its colors. In levels and scenes, tap a piece of scenery to choose its palette or give it transparent edges. Then “Try my settings”. The download above uses your settings.",
- tryit:"Try my settings", exportbtn:"Export my settings (.json)", importlbl:"Import settings",
+ labhelp:"Your settings are carried into the downloaded game and patch.",
+ tryit:"Try", exportbtn:"Export", importlbl:"Import",
  mood:{dx:"Batman DX (the published edition)",movie:"1989 movie",comic:"Comic book",pastel:"Pastel",night:"Gotham by night",green:"Game Boy green"},
  sc:["Text screens, Game Over","Logo and title screen","Gotham City (1-1, 2-1)","Chemical plant (1-2, 1-3)","Batman vs Jack (1-B)","Flugelheim Museum (2-2, 2-3)","Batwing, sunset (3-1)","Batwing, night (3-2)","Cathedral (4-1, 4-2)","Batman vs the Joker (4-B)","Scene: the police","Scene: the Joker","Scene: the Joker on screen","Scene: the ending","Scene: the Batmobile","End credits"],
  ob:["Batman","Shots, items","Enemies A","Enemies B","Enemies C","Flash (boss)","Flash","Flash"]
@@ -252,7 +290,7 @@ async function receive(file){
   const u=new Uint8Array(await file.arrayBuffer()), e=$('status'); e.dataset.frozen=1;
   const h=await sha1(u);
   if(h!==SHA_ORIG){ e.className='ko'; e.textContent=(u.length===SIZE&&u[0x143]===0x80)?t('already'):t('wrong'); return }
-  orig=u; e.className='ok'; e.textContent=t('good');
+  orig=u; e.className='ok'; e.textContent=t('good'); $('c1').classList.add('done');
   ['c2','c3','c4'].forEach(i=>$(i).hidden=false); await loadMood() }
 $('f').onchange=e=>e.target.files[0]&&receive(e.target.files[0]);
 const z=$('dropzone'); ['dragenter','dragover'].forEach(n=>z.addEventListener(n,e=>{e.preventDefault();z.classList.add('over')}));
