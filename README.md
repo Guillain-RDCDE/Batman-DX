@@ -30,6 +30,8 @@ The lab is also an editor. It reads the levels and drawings straight from your R
 
 Then try the result in the page, download your own game or patch, and export your settings to share them.
 
+The editor shows and edits the colors and the retouches of each place. It does not preview what the published edition adds on top: the sky gradient, the nightfall, the stained glass and the status bar touches. The game you play in the page or download has them all.
+
 <p align="center"><img src="images/editor.png" alt="The editor"></p>
 
 ## With an IPS patch
@@ -115,7 +117,7 @@ Original on the left, Batman DX on the right, at the same moment of the game.
 
 ## Six moods
 
-`Batman-DX.ips` is the published edition: a mix chosen place by place. The five others apply a single mood to the whole game.
+`Batman-DX.ips` is the published edition: a mix chosen place by place, with every detail described below. The five others apply a single mood to the whole game.
 
 <p align="center"><img src="images/moods.png" alt="The six moods"></p>
 
@@ -135,9 +137,16 @@ Original on the left, Batman DX on the right, at the same moment of the game.
 - **Objects have transparent edges.** Barrels, pipes, blocks and pickups sit on the scenery with no colored square around them. To get there, about a hundred small drawings of the game are retouched at display time, on color hardware only.
 - **Gotham's windows are lit**, and the distant towers are drawn as outlines on the sky so they recede.
 - **The title screen shines**: a highlight sweeps down the letters once a second.
-- **The status bar** keeps its colors (black and yellow) in every level.
-- **Enemies are solid.** The cloud enemies of stage 3-2 were hollow in the original drawing, which did not show on a white sky; they are filled in so the city no longer shows through.
+- **The status bar has its own touches**: Batman's icon is blue, the current weapon is ringed in red, and the energy gauge turns from green to orange to red.
+- **Stage 3-1 is a real sunset.** The sky is a gradient redrawn line by line, from deep blue down to yellow on the horizon. Night falls as the level goes by and the city lights up, a few buildings at a time, until it reaches the blue night of stage 3-2.
+- **Stained glass is glass.** In the museum and in the cathedral, the panes between the leads are filled; the cathedral gets marble columns.
+- **Enemies are solid.** The cloud enemies of stage 3-2, the rockets, the airships, the airliner (its canopy stays clear), both Batwing bosses and the cathedral turrets were hollow in the original drawing, which did not show on a white sky; they are filled in so the scenery no longer shows through.
+- **The title screen is centered** on the middle of the screen, to the dot: logo, emblem, signature and copyright lines.
 - **Bosses flash** when hit, as in the original.
+
+Night falling over stage 3-1, from the start of the level to the boss:
+
+<p align="center"><img src="images/nightfall.png" alt="Night falls over stage 3-1"></p>
 
 A whole level, for scale:
 
@@ -145,8 +154,9 @@ A whole level, for scale:
 
 ## What has been verified
 
-- **The game is the same.** The original and Batman DX receive exactly the same inputs and their memory is compared at every frame. On the twelve playable stages, in color and in monochrome, it is identical on every in-game frame compared.
-- **The pace holds.** The work added at the end of each frame always finishes before the limit. Screen changes last two to three frames longer, 0.1 to 0.2 % over a playthrough.
+- **The game is the same.** The original and Batman DX receive exactly the same inputs and their memory is compared at every frame, over 12,000 game frames per stage. In monochrome it is identical on every in-game frame compared. In color it is identical on ten of the twelve playable stages; on the two others, one to three frames out of about 5,000 differ, in the list of displayed characters only, where the two games were not sampled on the same frame, and they are identical again right after.
+- **The pace holds.** The work added at the end of each frame always finishes before the limit. Over long automatic playthroughs the game never stalls and runs 0.1 to 0.5 % fewer frames than the previous edition.
+- **The game's own effects are untouched.** The level opening, drawn line by line by the original game, is compared picture by picture in monochrome and matches as closely as the previous edition did.
 - **The patches are reproducible.** Rebuilding from source gives the six ROMs byte for byte.
 - **The online lab is tested end to end**: it produces exactly the same six ROMs, and a game edited in the page is run in an emulator to check that the retouch is really there.
 
@@ -155,7 +165,7 @@ What has **not** been verified: the game on real hardware, and a full playthroug
 ## Checksums of the produced games
 
 ```
-00b23afb8ba228e065dad9c44e697f9b6af675fe  Batman-DX.gbc (published edition)
+6ca57cb947bfe2a132dc54280deb3f15fccdd52a  Batman-DX.gbc (published edition)
 a6967ecb291a5782d61c5897e7f2291a157ffa06  Batman-DX-movie.gbc
 ff3a3b8d92a8923a7a5a222c2139a5a58e4cada0  Batman-DX-comic.gbc
 05fb008ad3b99e43bdc60385b0e3b210c87600d3  Batman-DX-pastel.gbc

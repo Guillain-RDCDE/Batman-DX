@@ -33,7 +33,7 @@ def run(rom,cgb):
         S['sync']+=1; S['reads']=0; S['plan']=plan_for(S['sync']); S['segs'].append([])
     pb.hook_register(0,0x10D5,level,None)
     def frame(c):
-        w=bytearray(m[0xC000:0xCC00]); w[0x520:0x524]=bytes(4); w[0x600:0x700]=bytes(256)   # the patch's own variables
+        w=bytearray(m[0xC000:0xCC00]); w[0x520:0x600]=bytes(0xE0); w[0x600:0x700]=bytes(256)   # the patch's own variables (the game never touches C520-C5FF)
         w[0x800:0xA00]=bytes(0x200); w[0xB00:0xC00]=bytes(0x100)                               # sound engine; screen buffer and stack
         w[0xB6:0xBD]=bytes(7)                                                                  # line effects of the stage title cards
         for i in range(3,0xA0,4): w[i]&=0xF0                                                   # color palette of characters

@@ -26,6 +26,20 @@ DEF wScene   EQU $C521             ; current scene (index into SceneTable)
 DEF wCnt     EQU $C522
 DEF wShine   EQU $C523
 DEF wTab     EQU $C600             ; tile -> attribute table of the current scene (256 bytes)
+; status bar and sky gradient (color hardware, levels): the game never touches C524-C5FF
+DEF wDx      EQU $C524             ; 1 = line effects active in this scene
+DEF wStep    EQU $C525             ; next gradient step
+DEF wGrad    EQU $C526             ; 2 bytes: gradient steps of the scene (0 = none)
+DEF wPalXi   EQU $C528             ; index of palette X (icon and gauge) for rBCPS, auto-increment
+DEF wPalX    EQU $C530             ; 8 bytes: the scenery colors of palette X
+DEF wGradBuf EQU $C540             ; gradient steps of the scene (3 bytes each, $FF at the end)
+DEF wNight    EQU $C570             ; line 15 work in bank EXTRA_BANK: bit 0 = night falls (3-1), bit 1 = bar to be armed
+DEF wPhase   EQU $C571             ; current night step ($FF = to be set)
+DEF rSTAT    EQU $FF41
+DEF rLYC     EQU $FF45
+DEF rLY      EQU $FF44
+DEF HUD_LINE EQU 143              ; last visible line: the bar gets its colors back during its horizontal blank.
+                                   ; Done before line 145, which the game waits for to turn the screen off ($0EB8).
 
 ; ---------------------------------------------------------------- hooks
 SECTION "hook_boot", ROM0[$0100]
@@ -78,9 +92,147 @@ ENDC
 SECTION "hook_cmd", ROM0[$0EF9]
     jp CmdHook                     ; replaces: push af / and $3F
 
+IF HUD_ON
+SECTION "hook_stat80", ROM0[$0E18]
+    jp DxSplit                     ; replaces: ldh a,[$FF97] / ldh [$FF43],a / pop af / reti (normal level)
+SECTION "hook_stat08", ROM0[$0E1E]
+    jp DxBoss                      ; replaces: ldh a,[rLCDC] / and $FD / ldh [rLCDC],a / pop af / reti (Jack's room)
+SECTION "hook_lyc", ROM0[$07F8]
+    call FixLyc                    ; replaces: ld a,$0F / ldh [rLYC],a (every frame, after the game's work)
+    nop
+ENDC
+
 SECTION "hook_obj", ROM0[$100E]
     call ObjFlags                  ; replaces: ldh [$FF83],a / ld d,$00
     nop
+
+IF HUD_ON
+SECTION "dxfix", ROM0[$0018]              ; rst $18-$38 vectors: empty ($FF) in the game, never called
+; The game resets its split line (15) after each frame's work: not while the line chain is running
+FixLyc:
+    ld a, [wDx]
+    and a
+    jr z, .w
+    ld a, [wStep]
+    inc a
+    ret nz                         ; a line of the chain is still to come in this frame
+.w:
+    ld a, $0F
+    ldh [rLYC], a
+    ret
+DxFixEnd:
+    ASSERT DxFixEnd <= $0040
+
+SECTION "dxnight", ROM0[$0028]             ; rst $28-$38 vectors: empty ($FF) in the game, never called
+; Line 15: if night falls in this level, go through bank EXTRA_BANK to advance one step; then the chain.
+NightStep:
+    ld a, [wNight]
+    and a
+    jr z, NightDone
+    ldh a, [hBank]
+    push af
+    ld a, EXTRA_BANK
+    ldh [hBank], a                 ; first the marker, then the bank
+    ld [$2000], a
+    call PhaseCheck
+    pop af
+    ldh [hBank], a
+    jr NightRest
+    ASSERT @ <= $0040
+SECTION "dxnight2", ROM0[$0013]
+NightRest:
+    ld [$2000], a
+    jr NightDone
+    ASSERT @ <= $0018
+SECTION "dxnight3", ROM0[$000B]
+NightDone:
+    jp NextLyc
+    ASSERT @ <= $0010
+
+SECTION "dxstat", ROM0[$0061]
+; Line interrupt: only two branches of the game's handler ($0E0D) are hooked, AF already pushed.
+; The game's own line effects (level openings, title cards) therefore keep their exact timing.
+; Normal level: the game splits the screen at line 15 (fixed bar above, scrolling scenery below). In addition, on
+; color hardware: at line 15 palette X gets its scenery colors back; then the steps of the sky gradient;
+; then, at the end of the picture, palette X gets the colors of the bar again.
+DxSplit:
+    ldh a, [rLYC]
+    cp $0F
+    jr nz, .other
+    ldh a, [$FF97]                 ; original work: scroll the scenery under the bar
+    ldh [$FF43], a
+    ld a, [wDx]
+    and a
+    jr z, .done
+    push bc
+    push hl
+    ld a, [wPalXi]
+    ldh [rBCPS], a
+    ld hl, wPalX
+    ld c, LOW(rBCPD)
+    call WaitH0
+REPT 8
+    ld a, [hl+]
+    ldh [c], a
+ENDR
+    xor a
+    ld [wStep], a
+    push de
+    call NightStep
+    pop de
+    pop hl
+    pop bc
+.done:
+    pop af
+    reti
+.other:
+    ld a, [wDx]
+    and a
+    jr z, .orig
+    ld a, [wStep]
+    inc a
+    jp nz, DxStatStep              ; a line of our chain
+.orig:
+    ldh a, [$FF97]                 ; not ours: original work
+    ldh [$FF43], a
+    jr .done
+DxBoss:                            ; Jack's room: the game turns characters off at line 128; palette X is free
+    ldh a, [rLCDC]
+    and $FD
+    ldh [rLCDC], a
+    ld a, [wDx]
+    and a
+    jr z, DxSplit.done
+    push bc
+    push de
+    push hl
+    call HudWrite
+    pop hl
+    pop de
+    pop bc
+    jr DxSplit.done
+WaitH0:                            ; wait for a horizontal or vertical blank (palettes accessible)
+    ldh a, [rSTAT]
+    and 2
+    jr nz, WaitH0
+    ret
+HudCols:
+    HudColsData
+GaugeTab:
+    GaugeData
+GradPtr:                           ; HL = current gradient step (wGradBuf + 3*wStep)
+    ld a, [wStep]
+    ld l, a
+    add a, a
+    add a, l
+    add a, LOW(wGradBuf)
+    ld l, a
+    ld h, HIGH(wGradBuf)
+    ret
+
+DxStatEnd:
+    ASSERT DxStatEnd <= $0100
+ENDC
 
 ; ---------------------------------------------------------------- code in bank 0
 SECTION "dx0", ROM0[$3B55]
@@ -181,6 +333,13 @@ LcdOn:                             ; A = value meant for rLCDC
     ldh [hBank], a                 ; flag first, then the bank: safe if an interrupt hits in between
     ld [$2000], a
     call SceneApply
+IF HUD_ON
+    ld a, EXTRA_BANK
+    ldh [hBank], a
+    ld [$2000], a
+    call ExtraApply                ; extra retouches, stored in another bank
+    call DxSetup
+ENDC
     pop af
     ldh [hBank], a
     ld [$2000], a
@@ -452,6 +611,131 @@ ShineTab:
     ShineData
 ENDC
 
+IF HUD_ON
+; Colors of the bar in palette X (icon, gauge according to energy). Waits until palettes are accessible.
+HudWrite:
+    ld a, [$C0C8]
+    cp 5
+    jr c, .e
+    ld a, 4
+.e:
+    add a, a
+    ld e, a
+    ld d, 0
+    ld hl, GaugeTab
+    add hl, de
+    ld a, [hl+]
+    ld e, a
+    ld d, [hl]
+    ld a, [wPalXi]
+    ldh [rBCPS], a
+    ld hl, HudCols
+    ld c, LOW(rBCPD)
+    call WaitH0
+    ld a, [hl+]
+    ldh [c], a
+    ld a, [hl+]
+    ldh [c], a
+    ld a, [hl+]
+    ldh [c], a
+    ld a, [hl+]
+    ldh [c], a
+    ld a, e
+    ldh [c], a
+    ld a, d
+    ldh [c], a
+    inc hl
+    inc hl
+    ld a, [hl+]
+    ldh [c], a
+    ld a, [hl]
+    ldh [c], a
+    ret
+
+DxStatStep:                        ; one gradient step, or the bar (end of the picture)
+    push bc
+    push hl
+    call GradPtr
+    ld a, [hl+]
+    cp $FF
+    jr z, .hud
+    ld a, $80                      ; palette 0, color 0: the sky
+    ldh [rBCPS], a
+    ld c, LOW(rBCPD)
+    call WaitH0
+    ld a, [hl+]
+    ldh [c], a
+    ld a, [hl+]
+    ldh [c], a
+    ld a, [wStep]
+    inc a
+    ld [wStep], a
+    ld a, [hl]                     ; line of the next step (or $FF)
+    ld b, a
+    cp $FF
+    jr z, .slow
+    ldh a, [rLY]
+    inc a
+    cp b
+    jr nc, .slow                   ; already passed: full path
+    ld a, b
+    ldh [rLYC], a
+    pop hl
+    pop bc
+    pop af
+    reti
+.slow:
+    push de
+    call NextLyc
+    pop de
+    jr .out2
+.hud:
+    push de
+    call HudWrite
+    pop de
+    call ChainEnd
+.out2:
+    pop hl
+    pop bc
+    pop af
+    reti
+
+; Next line of the chain. If it has already passed (late interrupt): gradient steps are skipped;
+; the bar is always written.
+NextLyc:
+    call GradPtr
+.nx:
+    ld a, [hl+]
+    cp $FF
+    jr z, .hud
+    ld b, a
+    ldh a, [rLY]
+    inc a
+    cp b
+    jr c, ChainEnd.set             ; LY+1 < line: still to come
+    inc hl
+    inc hl
+    ld a, [wStep]
+    inc a
+    ld [wStep], a
+    jr .nx
+.hud:
+    ldh a, [rLY]
+    ld b, HUD_LINE
+    cp b
+    jr c, ChainEnd.set
+    call HudWrite                  ; already in vertical blank: palettes accessible
+ChainEnd:                          ; the chain is over: back to the game's line 15
+    ld a, $FF
+    ld [wStep], a
+    ld b, $0F
+.set:
+    ld a, b
+    ldh [rLYC], a
+    ret
+
+ENDC
+
 SceneTabA:
     SceneTabAData
 SceneTabB:
@@ -554,3 +838,249 @@ Dx6End:
 
 SECTION "dx6b", ROMX[$7636], BANK[6]
     SceneBlocks2
+
+IF HUD_ON
+SECTION "dx4", ROMX[$65C0], BANK[EXTRA_BANK]
+; A scene is turned back on (screen off): prepare the icon, the gauge and the gradient
+DxSetup:
+    ld a, $FF
+    ld [wGradBuf], a
+    ld [wStep], a                  ; chain at rest
+    xor a
+    ld [wDx], a
+    ld [wGrad], a
+    ld [wGrad+1], a
+    ld a, [wScene]
+    ld e, a
+    ld d, 0
+    ld hl, HudXTab
+    add hl, de
+    ld a, [hl]
+    cp $FF
+    ret z
+    ld [wPhase], a                 ; (kept for a moment: bit 7 = palette X is free in this scenery)
+    and $07
+    ld b, a                        ; B = palette X
+    add a, a
+    add a, a
+    add a, a
+    or $80
+    ld [wPalXi], a
+    ld c, a
+    ld hl, wPalX                   ; keep the scenery colors of palette X
+    ld d, 8
+.rd:
+    ld a, c
+    and $3F
+    ldh [rBCPS], a
+    ldh a, [rBCPD]
+    ld [hl+], a
+    inc c
+    dec d
+    jr nz, .rd
+    ld a, 2                        ; the icon and the gauge will take palette X at the first line 15 of the level:
+    ld [wNight], a                  ; during the level opening, the scenery keeps its colors in palette X
+    ld a, [wPhase]
+    bit 7, a
+    jr z, .later
+    call ArmHud                    ; palette X free in this scenery (Batwing, bell tower, Jack's room): bar armed right away
+    call HudWrite
+.later:
+    ld hl, GradList
+.gl:
+    ld a, [hl+]
+    cp $FF
+    jr z, .gdone
+    ld b, a
+    ld a, [hl+]
+    ld c, a
+    ld a, [hl+]
+    ld d, a
+    ld a, [wScene]
+    cp b
+    jr nz, .gl
+    ld h, d                        ; copy the steps to RAM (read during the interrupt, whatever the bank)
+    ld l, c
+    ld de, wGradBuf
+.gc:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    cp $FF
+    jr z, .gf
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    jr .gc
+.gf:
+    ld a, LOW(wGradBuf)
+    ld [wGrad], a
+    ld a, HIGH(wGradBuf)
+    ld [wGrad+1], a
+.gdone:
+    ld a, [wScene]
+    cp NIGHT_SCENE
+    jr nz, .nonight
+    ld a, [wNight]
+    or 1
+    ld [wNight], a
+    ld a, $FF
+    ld [wPhase], a
+    call NightPhase
+.nonight:
+    ld a, 1
+    ld [wDx], a
+    ret
+
+; Night falls: the step depends on the level page ($FF98). At each new step, the colors of the gradient steps
+; slide one notch along the ramp (from yellow to night) and the waves follow. Bank EXTRA_BANK.
+PhaseCheck:                        ; called at line 15 when wNight is not zero (bit 1: bar to be armed, bit 0: night)
+    ld a, [wNight]
+    bit 1, a
+    call nz, ArmHud
+    ld a, [wNight]
+    bit 0, a
+    ret z
+NightPhase:
+    ldh a, [$FF98]
+    cp NIGHT_PAGES
+    jr c, .ok
+    ld a, NIGHT_PAGES-1
+.ok:
+    ld e, a
+    ld d, 0
+    ld hl, NightPages
+    add hl, de
+    ld a, [hl]                     ; offset in the ramp
+    ld hl, wPhase
+    cp [hl]
+    ret z
+    ld [hl], a
+    add a, a
+    ld e, a                        ; DE = 2 * offset
+    push de
+    ld hl, NightRamp
+    add hl, de
+    ld de, wGradBuf+1
+    ld b, NIGHT_STEPS
+.c:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    inc de
+    dec b
+    jr nz, .c
+    pop de
+    ld hl, NightRamp
+    add hl, de
+    ld a, [hl+]
+    ld b, a
+    ld c, [hl]                     ; BC = first sky color = hollow of the waves
+    ld hl, NightWaves
+    add hl, de
+    ld a, $88                      ; palette 1, colors 0 and 1
+    ldh [rBCPS], a
+    call WaitH0
+    ld a, b
+    ldh [rBCPD], a
+    ld a, c
+    ldh [rBCPD], a
+    ld a, [hl+]
+    ldh [rBCPD], a
+    ld a, [hl]
+    ldh [rBCPD], a
+    ld hl, NightWindows            ; city windows: palette 0, colors 2 and 3 (two groups of buildings)
+    add hl, de
+    add hl, de
+    ld a, $84
+    ldh [rBCPS], a
+    call WaitH0
+    ld b, 4
+.f:
+    ld a, [hl+]
+    ldh [rBCPD], a
+    dec b
+    jr nz, .f
+    ret
+; The Batman icon and the gauge switch to palette X (5 cells of the bar). Outside the drawing of a line.
+ArmHud:
+    ld a, [wNight]
+    and $FD
+    ld [wNight], a
+    ld a, [wPalXi]
+    rrca
+    rrca
+    rrca
+    and $07
+    ld b, a                        ; B = palette X
+    ldh a, [rVBK]
+    push af                        ; the interrupted code may be writing attributes
+    call WaitH0
+    ld a, 1
+    ldh [rVBK], a
+    ld a, b
+    ld [$9800+32+13], a            ; Batman icon
+    ld hl, $9800+32+16             ; gauge (4 cells)
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl], a
+    pop af
+    ldh [rVBK], a
+    ret
+NightWindows:
+    NightWindowsData
+NightPages:
+    NightPagesData
+NightRamp:
+    NightRampData
+NightWaves:
+    NightWavesData
+
+; Extra retouches (same format as the scene's own), in bank EXTRA_BANK, already selected
+ExtraApply:
+    ld a, [wScene]
+    cp NB_SCENES
+    ret nc
+    add a, a
+    ld e, a
+    ld d, 0
+    ld hl, ExtraTab
+    add hl, de
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+    or h
+    ret z
+.l:
+    ld a, [hl+]
+    and a
+    ret z
+    ld b, a
+    ld a, [hl+]
+    ld e, a
+    ld a, [hl+]
+    ld d, a
+.c:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec b
+    jr nz, .c
+    jr .l
+
+HudXTab:
+    HudXData
+GradList:
+    GradListData
+ExtraTab:
+    ExtraData
+Dx4End:
+    ASSERT Dx4End <= $8000
+ENDC

@@ -33,6 +33,8 @@ Other useful landmarks:
 
 The patch adds about 1,000 bytes of code in bank 0 (from `3B55`) and the color data in bank 6 (`4CD9` and `7636`). It moves nothing: it replaces a few instructions with calls.
 
+The published edition adds about 370 more bytes in bank 0 (the end of the same area, plus the empty `rst` vectors `000B`–`003F` and the free bytes `0061`–`00EB`), and 6,400 bytes of code and data in the free end of bank 4 (from `65C0`). The five other moods do not include any of it.
+
 ### Knowing whether the console has color
 
 At power-on, a color console puts `11` in register A. The patch records it (`C520`). On a monochrome Game Boy, all added code is skipped and the game behaves like the original.
@@ -61,6 +63,26 @@ The six instructions that turn the screen on are replaced by a call (`rst $08`, 
 
 Routine `0EF9` is hooked. After each scenery command, the patch writes the palettes of the same cells by reading the table. The scrolling column has a direct, unrolled path that lays down the 16 tiles then the 16 palettes barely slower than the original laid down the tiles alone. The status bar and the window are left alone: their palettes never change.
 
+### Line effects (published edition)
+
+In a level, the game already takes an interrupt at line 15 to keep the status bar still while the scenery scrolls. Its handler (`0E0D`) has one branch per screen mode. Only two branches are hooked, `0E18` (normal level) and `0E1E` (Jack's room): the branch that draws level openings and title cards line by line is not touched, so those effects keep their exact timing.
+
+From that line 15, the patch chains its own line interrupts by moving the compare line (`LYC`), and gives it back to the game at the end of the picture:
+
+1. **Line 15.** One palette, called palette X, is shared by the Batman icon, the energy gauge and a piece of scenery. It gets its scenery colors back.
+2. **Sky gradient.** On stage 3-1, eleven steps down the screen each rewrite the sky color during a horizontal blank. Stage 3-2 does the same with four steps.
+3. **Line 143.** Palette X takes the colors of the bar again, the gauge color being chosen from the energy (`C0C8`). This must be over before line 145, which the game polls to turn the screen off (`0EB8`).
+
+The game rewrites `LYC` to 15 after each frame's work (`07F8`); that instruction is hooked so it leaves the chain alone while it runs. If an interrupt comes late, the passed steps are skipped and the bar is still written.
+
+A step costs about 90 machine cycles, most of it waiting for the horizontal blank. Eleven steps keep stage 3-1 at full speed; twenty-two made it 6 to 13 % slower.
+
+**Nightfall.** On stage 3-1 the eleven sky colors are a window on a ramp of 22 colors, from night to the yellow of the horizon. Every two pages of scenery (`FF98`), the window slides one notch towards the night; the wave band and the city windows, two groups of buildings on two colors of the same palette, follow. That routine lives in bank 4 and is called from line 15 through a short relay.
+
+### Extra retouches (published edition)
+
+The scene areas of bank 6 are nearly full, so the published edition keeps a second list of retouches per scene in bank 4, in the same format, applied right after the first one: lit windows, glass panes, filled enemies, and the title screen. The title logo and the emblem were two dots off center: their tiles are redrawn shifted, 168 in all, and the cells that needed a new tile get their palette from an entry that selects the attribute map.
+
 ### Characters
 
 At build time, a tool writes the palette number into the three free bits of each piece's attribute, according to the tile number: Batman, shots and items, three families of enemies. The game copies those bits without knowing. When a boss flashes, the patch turns the “inverted palette” flag into “palette 7 − p”, at no extra cost.
@@ -75,13 +97,15 @@ The title letters span five rows, each with its own palette. In the two title sc
 
 ### Memory used
 
-`C520` to `C523` and `C600` to `C6FF`. The original game never writes to those areas on any stage tried.
+`C520` to `C5FF` and `C600` to `C6FF`. The original game never writes to those areas on any stage tried.
 
 ## The editor in the lab
 
 The lab page rebuilds, in the browser, what the game does at load time. It unpacks the graphics sheets (the routines at `0F74` and `0FC1`) and the levels (`10D5`) from the original ROM, then reads the 16 scenes from the patched ROM into an editable model: table, palettes, retouches. Every change goes into the model; the game is produced by writing the model back into the two areas reserved for scene data in bank 6 (`4D67`–`67FF` and `7636`–`7FFF`) and fixing the checksum. With no change, this gives back the built ROM byte for byte.
 
 A retouch is one more entry in a scene's list: 16 bytes to write over a tile when the screen turns back on. The published edition leaves room for about 50 more.
+
+The page does not read bank 4 nor the line effects: its previews show a place without the gradient, the nightfall and the extra retouches of the published edition. Those bytes are left as they are, so the game it produces keeps them.
 
 ## The colors
 
@@ -93,12 +117,15 @@ The six moods are described in `src/moods/*.json`: tables, palettes and retouche
 
 `tools/compare.py` runs the original in monochrome and Batman DX side by side. Both receive exactly the same inputs, injected into the joypad reading routine. At every game frame it compares the game memory and, every eight frames, the level and the screen.
 
-Result on the published version, 6,000 to 14,000 game frames per run:
+Result on the published version, 8,000 to 12,000 game frames per run:
 
 | Run | In-game result |
 |---|---|
-| Stages 1 to 12, Batman DX in color | identical on every frame compared |
-| Stages 1, 2, 3 (two series), 6, 9, 11, Batman DX in monochrome | identical on every frame compared |
+| Stages 1, 2, 3, 6 to 12, Batman DX in color | identical on every frame compared |
+| Stages 4 and 5, Batman DX in color | 1 and 3 frames out of about 5,000 differ, in the displayed characters only |
+| Stages 1, 4, 6, 8, 9, 11, Batman DX in monochrome | identical on every frame compared |
+
+On those few frames the original shows the same characters twice in its table: the picture was sampled one frame apart in the two games, because the color game sometimes takes one frame more. The game memory is identical before and after.
 
 Three honest caveats:
 
@@ -108,11 +135,17 @@ Three honest caveats:
 
 ### The pace
 
-End-of-frame work must finish before line 153. Across the runs above, the original stops at line 151 at the latest and Batman DX at line 152. The rare frames where the original already overruns overrun in the same way. Screen changes last two to three frames longer, 0.1 to 0.2 % more frames over a run.
+End-of-frame work must finish before line 153. Across the runs above, the original stops at line 151 at the latest and Batman DX at line 152. The rare frames where the original already overruns overrun in the same way. Screen changes last two to three frames longer.
+
+The line effects take their time from the game, not from the end of the frame. Twelve long automatic playthroughs, one per stage, were run on the previous edition and on this one with the same inputs, timed on real frames: the game never stalls, and 0.1 % fewer game frames are run (0.5 % on two stages). On eleven stages the same number of levels is loaded and the screen is turned off as many times; on the twelfth the two runs drift apart after a while, as such a small shift is enough to change the outcome of a fight.
+
+### The game's own line effects
+
+The opening of a level is drawn line by line by the original game. Its pictures are compared in monochrome between the original and Batman DX on three stages: 195 distinct pictures on each side, all found in the original but one to three, exactly as with the previous edition.
 
 ### Two emulators
 
-Comparisons run on PyBoy. The game was also run on cycle-accurate Gambatte, in color and in monochrome: logo, title, cutscene and first level display without defects. The lab page uses a third emulator, WasmBoy.
+Comparisons run on PyBoy. The game was also run on cycle-accurate Gambatte, in color and in monochrome: logo, title, cutscene and first level display without defects, and so do the sky gradient, the nightfall and the status bar of the published edition. The lab page uses a third emulator, WasmBoy.
 
 ### Build and online lab
 

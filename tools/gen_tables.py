@@ -45,5 +45,52 @@ o.append('DEF SHINE EQU %d'%(1 if T.get('shine') else 0))
 o.append('MACRO ShineData\n'+db(ec)+'\nENDM')
 o.append('MACRO SceneBlocks\n'+'\n'.join(blk[:10])+'\nENDM')
 o.append('MACRO SceneBlocks2\n'+'\n'.join(blk[10:])+'\nENDM')
+# ---- status bar (icon, gauge), sky gradient, nightfall, extra retouches stored in bank 4 (published edition only)
+H=J.get('status_icons')
+o.append('DEF HUD_ON EQU %d'%(1 if H else 0)); o.append('DEF EXTRA_BANK EQU 4')
+if H:
+    o.append('MACRO HudXData\n'+db([S.get(n,{}).get('hud_x',0xFF) if S.get(n,{}).get('hud_x') is not None else 0xFF for n in SCENES])+'\nENDM')
+    hc=[]
+    for c in H['colors']: v=c15(c); hc+=[v&255,v>>8]
+    o.append('MACRO HudColsData\n'+db(hc)+'\nENDM')
+    jg=[]
+    for e in range(5): v=c15(H['gauge'][e]); jg+=[v&255,v>>8]
+    o.append('MACRO GaugeData\n'+db(jg)+'\nENDM')
+    gl=[]; gd=[]
+    for i,n in enumerate(SCENES):
+        d=S.get(n,{}).get('gradient')
+        if not d: continue
+        gl.append('    db %d\n    dw Grad_%d'%(i,i))
+        b=[]
+        for line,c in d: v=c15(c); b+=[line,v&255,v>>8]
+        gd.append('Grad_%d:\n'%i+db(b+[0xFF]))
+    o.append('MACRO GradListData\n'+'\n'.join(gl+['    db $FF']+gd)+'\nENDM')
+    ex=[]; tb=[]
+    for i,n in enumerate(SCENES):
+        pe=S.get(n,{}).get('patch_extra') or []
+        if not pe: tb.append('    dw 0'); continue
+        tb.append('    dw Extra_%d'%i); pt=[]
+        for addr,data in pe: pt+=[len(data),addr&255,addr>>8]+data
+        ex.append('Extra_%d: ; %s\n'%(i,n)+db(pt+[0]))
+    o.append('MACRO ExtraData\n'+'\n'.join(tb+ex)+'\nENDM')
+    # nightfall (one scene): color ramp, offset for each level page, wave and window colors for each offset
+    NS=[(i,S[n]['nightfall']) for i,n in enumerate(SCENES) if S.get(n,{}).get('nightfall')]
+    if NS:
+        i,Nn=NS[0]; ne=len(S[SCENES[i]]['gradient'])
+        o.append('DEF NIGHT_SCENE EQU %d'%i); o.append('DEF NIGHT_STEPS EQU %d'%ne); o.append('DEF NIGHT_PAGES EQU %d'%len(Nn['pages']))
+        assert max(Nn['pages'])+ne<=len(Nn['ramp']) and len(Nn['waves'])>=max(Nn['pages'])+1
+        rb=[]
+        for c in Nn['ramp']: v=c15(c); rb+=[v&255,v>>8]
+        vb=[]
+        for c in Nn['waves']: v=c15(c); vb+=[v&255,v>>8]
+        fb=[]
+        for a_,b_ in Nn['windows']:
+            for c in (a_,b_): v=c15(c); fb+=[v&255,v>>8]
+        o.append('MACRO NightPagesData\n'+db(Nn['pages'])+'\nENDM'); o.append('MACRO NightRampData\n'+db(rb)+'\nENDM')
+        o.append('MACRO NightWavesData\n'+db(vb)+'\nENDM'); o.append('MACRO NightWindowsData\n'+db(fb)+'\nENDM')
+    else:
+        o.append('DEF NIGHT_SCENE EQU $FE'); o.append('DEF NIGHT_STEPS EQU 1'); o.append('DEF NIGHT_PAGES EQU 1')
+        o.append('MACRO NightPagesData\n    db 0\nENDM'); o.append('MACRO NightRampData\n    db 0,0\nENDM')
+        o.append('MACRO NightWavesData\n    db 0,0\nENDM'); o.append('MACRO NightWindowsData\n    db 0,0,0,0\nENDM')
 os.makedirs('build',exist_ok=True)
 open('build/scenes.inc','w').write('\n'.join(o)+'\n')
