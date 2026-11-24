@@ -4,7 +4,7 @@
 import asyncio,hashlib,sys,os,json,tempfile
 from playwright.async_api import async_playwright
 ROM=sys.argv[1]; URL='http://localhost:8766/index.html'; ok=True
-MOODS=('dx','movie','comic','pastel','night','green')
+MOODS=('dx','plus','movie','comic','pastel','night','green')
 def check(name,cond,detail=''):
     global ok; ok&=bool(cond); print(('OK   ' if cond else 'FAIL '),name,detail)
 async def dl(pg,sel):
@@ -38,6 +38,8 @@ async def main():
             check('mood %-6s: checksum displayed'%v,sha(want) in await pg.inner_text('#sha'))
             ips,iname=await dl(pg,'#dlips'); ref=open('patches/Batman-DX%s.ips'%('' if v=='dx' else '-'+v),'rb').read()
             check('mood %-6s: downloaded patch = repository patch, and gives the game'%v,ips==ref and ips_apply(orig,ips)==want,iname)
+        await pg.select_option('#mood','plus'); await pg.wait_for_timeout(1500)
+        check('Plus edition: editor hidden, note shown',await pg.is_hidden('#c4') and '256' in await pg.inner_text('#moodnote'))
         await pg.select_option('#mood','dx'); await pg.wait_for_timeout(1200)
         await pg.select_option('#scene','2'); await pg.select_option('#what','bg')
         await pg.evaluate("()=>{const i=document.querySelector('#pals input');i.value='#ff0000';i.dispatchEvent(new Event('input'))}")

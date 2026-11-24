@@ -149,9 +149,9 @@ Comparisons run on PyBoy. The game was also run on cycle-accurate Gambatte, in c
 
 ### Build and online lab
 
-- Rebuilding from source gives the six ROMs byte for byte.
+- Rebuilding from source gives the seven ROMs byte for byte.
 - Each patch, applied to the original ROM, gives the matching ROM.
-- `tools/test_page.py` drives the page in a browser: wrong file rejected, six moods identical to the build, downloaded patch identical to the repository's, changing one color only alters its two bytes and the checksum, export then import give the same game.
+- `tools/test_page.py` drives the page in a browser: wrong file rejected, the published edition, the Plus edition and the five moods identical to the build, downloaded patch identical to the repository's, changing one color only alters its two bytes and the checksum, export then import give the same game.
 - `tools/test_editor.py` checks the editor: the page reads the eleven levels exactly as a separate reference reader does, and the museum drawings exactly as the original game puts them in video memory; a tile retouched with real clicks ends up in the produced ROM, in the right scene only; that ROM is then run in an emulator, where the retouched tile is found in video memory and its new palette in the table; removing the retouch gives back the starting game byte for byte; when the cartridge is full the page refuses cleanly and the game still boots.
 
 ### What is not verified
@@ -160,10 +160,79 @@ Comparisons run on PyBoy. The game was also run on cycle-accurate Gambatte, in c
 - A full playthrough by a human. Each place was reached by forcing the stage number, the credits by forcing the jump to `0B3A`.
 - Items released by blocks were seen by placing them by hand in the scenery, not by breaking a block.
 
+## The Plus edition
+
+The Plus edition is built from the same source (`src/dx.asm`, everything under `IF PLUS`) with `src/moods/plus.json`. It keeps every mechanism above and adds the ones below. The published edition and the five moods do not contain any of it: they are byte for byte what they were.
+
+### A 256 KB cartridge
+
+The build appends 128 KB of empty banks to the original ROM and writes `$03` at `$0148` (16 banks). The game never selects banks 8 to 15; they hold:
+
+| Bank | Contents |
+|---|---|
+| 8 | the routines that run at line 15 (living colors, slow scrolling, nightfall), the extra retouches of most places, gradients and color tables |
+| 9 | added scenery for the levels (lists and templates), the remnant tables, their reader |
+| 10 | the retouches and the added scenery of the Batwing stages, the cathedral, the bell tower and the plant |
+
+### New drawings without new tile numbers
+
+The Game Boy Color has a second bank of video memory; bit 3 of a background attribute picks it. The Plus edition draws up to 96 new tiles there, numbered A0-FF (the same numbers in bank 0 belong to characters). The scene table of a place gives these numbers the attribute `8 | palette`. The status bar keeps the original tiles of bank 0, so a blank tile can become a wall in the scenery and stay blank in the bar.
+
+Redrawn tiles of bank 0 and new tiles of bank 1 are written once, when the screen turns back on, through the extra retouches (see above). To fit, the Plus build drops writes that a later one covers and merges writes that follow each other in memory.
+
+### Added scenery
+
+Tiles `$80`-`$FF` behave like empty space for the game: they are never solid, never items. The Plus edition therefore adds scenery by writing such tiles into the level, right after the game has unpacked it (`$114B`, end of the level loader `$10D5`, hook `LevelPatch` → `LevelDo` in bank 9). It only ever writes on an empty cell (`$25`) or a scenery cell (`$80`-`$FF`); blocks, items, floors and walls are never touched. Four forms of table exist, per stage:
+
+| Form | Contents | Used by |
+|---|---|---|
+| 0 | a list of (address, tile) | short lists |
+| 1 | one byte per level cell (5,120 bytes) | Gotham, where almost every cell changes |
+| 2 | a template of N columns × 16 cells, copied over the whole level, then a list of exceptions | the museum (the level repeats every 10 columns) and the distant skyline of the Batwing stages (16 columns) |
+| 3 | runs of (length, address, tiles), read from bank 10 | the cathedral and the bell tower |
+
+The template copier is `LevelTpl`. Form 3 is read by `FarCode`, a 32-byte routine that switches to bank 10, copies, and switches back; since it cannot run from the bank it switches away from, it is copied to RAM (`wFar`, `$C548`) each time the screen turns back on.
+
+When a block breaks, the game puts tile `$80` in its place (`1:4579`). Two hooks (`1:457A`, `1:45C0`) look the cell up in a per-stage table and leave the wall that was really behind the block.
+
+### Line steps that can scroll
+
+In the published edition a line step rewrites one sky color. In the Plus edition a step is seven bytes: line, palette index, **target register**, four bytes. The step handler reads the target with `ld c,[hl] / inc hl` where it used to load `LOW(rBCPD)`, the same size, so nothing moves in bank 0. With `rBCPD` the four bytes are two colors; with `SCX` (`$43`) they set the horizontal scroll from that line down.
+
+Two steps must be at least three lines apart: closer than that, the second one arrives after its line has started and is skipped.
+
+### Two layers in the Batwing stages
+
+At line 15, `Parallax` keeps a running total of the level scroll (`$FF97`, signed deltas, `wSlow` at `$C544`) and writes `total >> k` into every step aimed at `SCX`, `k` being the step's palette index: 0 for the game's own scroll, 1 for half speed, 2 for a quarter. In 3-1 and 3-2 the clouds scroll at a quarter, the sky and the distant skyline at half, the game's buildings at full speed.
+
+A band can only scroll at another speed if its scenery repeats every 16 or 32 columns: the screen memory is 32 columns wide and holds whatever level column was last drawn there. The distant skyline is a 16-column template; the clouds repeat every 2 columns. Under the skyline, from line 96, the background color becomes the color of the distant city (or, in 3-1, the sunset glow), so the boundary between the two speeds never shows.
+
+### Living colors
+
+Some colors change over time: lamps, signs, beacons, candles, alarm lights, twinkling windows, moonlight in stained glass. Every 8 frames, `Life` (bank 8, called at line 15) moves one step through a 64-step table: color 0 of palette X and the two colors written by each of the first three line steps. Nothing is written to the palettes directly; the line steps carry the new colors. In 3-1, where night falls, the nightfall routine starts at a later step (`NIGHT_FIRST`) so that both can run.
+
+### Transparency
+
+A background cell has one palette of four colors and no transparency. The only color that looks transparent is the exact color of what is behind. Every place therefore gives color 0 of each palette the exact wall or sky color, and every added drawing that sits on a wall keeps that color around it. Where the background varies (a sky gradient, a moonbeam), nothing that needs transparency is placed.
+
+Characters do have a transparent color. In the original drawings of shots, muzzle flashes and explosions, color 1 is a very light grey that disappears against the light screen of a Game Boy; on dark scenery it showed as a white halo. The Plus edition redraws these tiles with color 1 turned into the transparent color, so they keep their original shape and size.
+
+### Characters
+
+A character pose that mixed two palettes changed color from one frame to the next. The Plus edition gives some poses a single palette (`objtile` in `plus.json`), only where the pose is used by that character alone; the moving platforms of the plant get a palette of their own.
+
+### Memory used (Plus edition)
+
+`C540`-`C573` and `C580`-`C5FF`, in the area the original game never writes to: living colors table pointer, broken block mode and remnant, slow scrolling total, template size, the copied `FarCode` routine, nightfall and living colors state, and the line steps (`C580`, seven bytes each).
+
+### Verification of the Plus edition
+
+The Plus edition is compared frame by frame with the original on stages 1 to 12, in color and in monochrome, with one change to the comparison: scenery tiles (`$80`-`$FF`) count as empty, since that is exactly how the game treats them. Every stage is identical. The scene at stage 13 shows the same difference as the published edition (the comparison tool cannot follow that animated scene). It runs at most 0.7 % slower than the original on the stages measured (stage 3-1, with its gradient, nightfall and two scrolling layers; the published edition: 0.4 %).
+
 ## Rebuilding
 
 ```sh
-./build.sh "Batman - The Video Game (World).gb" [dx|movie|comic|pastel|night|green]
+./build.sh "Batman - The Video Game (World).gb" [dx|movie|comic|pastel|night|green|plus]
 ```
 
 The script checks the ROM checksum, generates the tables, assembles `src/dx.asm` over the ROM, writes the character palettes, fixes the header and writes the ROM and the patch into `out/`. It refuses to build if the added code overwrites anything but `FF` bytes of the original cartridge.

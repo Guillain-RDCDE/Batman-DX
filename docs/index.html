@@ -89,6 +89,7 @@ footer{padding:22px 0;color:var(--mute);font-size:12px}
     <button class="go" id="dlrom" data-t="dlrom"></button>
     <button id="dlips" data-t="dlips"></button>
   </div>
+  <p id="moodnote" class="soft"></p>
   <p id="sha"></p>
 </section>
 
@@ -170,7 +171,10 @@ const T={fr:{
  free:"Place libre pour les retouches : ", bytes:" octets", level:"Étape ", screen:"Écran",
  labhelp:"Les réglages sont repris dans le jeu et le patch téléchargés.",
  tryit:"Essayer", exportbtn:"Exporter", importlbl:"Importer",
- mood:{dx:"Batman DX (l'édition publiée)",movie:"Film 1989",comic:"Bande dessinée",pastel:"Pastel",night:"Gotham la nuit",green:"Game Boy vert"},
+ mood:{dx:"Batman DX (l'édition publiée)",plus:"Batman DX Plus (décors redessinés, cartouche de 256 Ko)",movie:"Film 1989",comic:"Bande dessinée",pastel:"Pastel",night:"Gotham la nuit",green:"Game Boy vert"},
+ note:{dx:"Les couleurs de chaque lieu, retouchées une à une. Modifiable dans l'éditeur ci-dessous.",
+  plus:"Gotham la nuit, lieu par lieu : décors ajoutés et redessinés (immeubles, usine, musée, cathédrale, clocher), deux plans qui défilent au Batwing, lumières qui vivent, tirs et objets sans halo, écrans fixes de nuit. Le jeu reste identique. Cartouche agrandie à 256 Ko : cette édition se joue et se télécharge ici, mais ne se modifie pas dans l'éditeur.",
+  other:"Une autre répartition des couleurs, sur la même base. Modifiable dans l'éditeur ci-dessous."},
  sc:["Écrans de texte, Game Over","Logo et écran-titre","Gotham City (1-1, 2-1)","Usine chimique (1-2, 1-3)","Batman contre Jack (1-B)","Musée Flugelheim (2-2, 2-3)","Batwing, coucher de soleil (3-1)","Batwing, nuit (3-2)","Cathédrale (4-1, 4-2)","Batman contre le Joker (4-B)","Scène : la police","Scène : le Joker","Scène : le Joker à l'écran","Scène : la fin","Scène : la Batmobile","Générique de fin"],
  ob:["Batman","Tirs, objets","Ennemis A","Ennemis B","Ennemis C","Éclat (boss)","Éclat","Éclat"]
 },en:{
@@ -190,7 +194,10 @@ const T={fr:{
  free:"Free room for retouches: ", bytes:" bytes", level:"Stage ", screen:"Screen",
  labhelp:"Your settings are carried into the downloaded game and patch.",
  tryit:"Try", exportbtn:"Export", importlbl:"Import",
- mood:{dx:"Batman DX (the published edition)",movie:"1989 movie",comic:"Comic book",pastel:"Pastel",night:"Gotham by night",green:"Game Boy green"},
+ mood:{dx:"Batman DX (the published edition)",plus:"Batman DX Plus (redrawn scenery, 256 KB cartridge)",movie:"1989 movie",comic:"Comic book",pastel:"Pastel",night:"Gotham by night",green:"Game Boy green"},
+ note:{dx:"The colors of every place, retouched one by one. Editable in the editor below.",
+  plus:"Gotham by night, place by place: added and redrawn scenery (buildings, plant, museum, cathedral, bell tower), two layers scrolling in the Batwing stages, living lights, shots and items without a halo, night cutscenes. The game itself is unchanged. The cartridge grows to 256 KB: this edition can be played and downloaded here, but not changed in the editor.",
+  other:"Another spread of colors on the same base. Editable in the editor below."},
  sc:["Text screens, Game Over","Logo and title screen","Gotham City (1-1, 2-1)","Chemical plant (1-2, 1-3)","Batman vs Jack (1-B)","Flugelheim Museum (2-2, 2-3)","Batwing, sunset (3-1)","Batwing, night (3-2)","Cathedral (4-1, 4-2)","Batman vs the Joker (4-B)","Scene: the police","Scene: the Joker","Scene: the Joker on screen","Scene: the ending","Scene: the Batmobile","End credits"],
  ob:["Batman","Shots, items","Enemies A","Enemies B","Enemies C","Flash (boss)","Flash","Flash"]
 }};
@@ -199,7 +206,7 @@ const $=id=>document.getElementById(id), t=k=>T[L][k];
 function applyTexts(){document.documentElement.lang=L;document.querySelectorAll('[data-t]').forEach(e=>{if(e.id!=='status'||!e.dataset.frozen)e.textContent=t(e.dataset.t)});
   const a=$('mood'),v=a.value;a.innerHTML='';for(const k of Object.keys(T.fr.mood)){const o=document.createElement('option');o.value=k;o.textContent=t('mood')[k];a.appendChild(o)}a.value=v||'dx';
   const s=$('scene'),sv=s.value;s.innerHTML='';t('sc').forEach((n,i)=>{const o=document.createElement('option');o.value=i;o.textContent=n;s.appendChild(o)});s.value=sv||'2';
-  if(M)renderPalettes()}
+  if(M)renderPalettes(); if(orig)showNote()}
 $('bfr').onclick=()=>{L='fr';applyTexts()};$('ben').onclick=()=>{L='en';applyTexts()};
 
 // ---------------------------------------------------------------- patch constants
@@ -217,7 +224,12 @@ let orig=null, base=null, rom=null, M=null;
 
 async function sha1(u8){const h=await crypto.subtle.digest('SHA-1',u8);return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join('')}
 function applyIPS(src,ips){
-  const d=new Uint8Array(src); if(String.fromCharCode(...ips.slice(0,5))!=='PATCH')throw new Error('IPS');
+  if(String.fromCharCode(...ips.slice(0,5))!=='PATCH')throw new Error('IPS');
+  let size=src.length,q=5;                       // the Plus edition makes the cartridge grow (128 KB -> 256 KB)
+  while(q+3<=ips.length&&!(ips[q]===0x45&&ips[q+1]===0x4F&&ips[q+2]===0x46&&q+3===ips.length)){
+    const o=(ips[q]<<16)|(ips[q+1]<<8)|ips[q+2], n=(ips[q+3]<<8)|ips[q+4]; q+=5;
+    if(n){size=Math.max(size,o+n);q+=n}else{size=Math.max(size,o+((ips[q]<<8)|ips[q+1]));q+=3}}
+  const d=new Uint8Array(size); d.set(src);
   let p=5;
   while(p+3<=ips.length){ if(ips[p]===0x45&&ips[p+1]===0x4F&&ips[p+2]===0x46&&p+3===ips.length)return d;
     const o=(ips[p]<<16)|(ips[p+1]<<8)|ips[p+2], n=(ips[p+3]<<8)|ips[p+4]; p+=5;
@@ -253,7 +265,7 @@ function writeModel(sc,src){
     if(pos[z]+b.length>ZONES[z][1])z=1-z; if(pos[z]+b.length>ZONES[z][1])throw new Error('full');
     d.set(b,pos[z]); const a=0x4000+(pos[z]-BANK6); d[SCENE_TABLE+2*i]=a&255; d[SCENE_TABLE+2*i+1]=a>>8; pos[z]+=b.length });
   fixChecksum(d); return {rom:d,free:(ZONES[0][1]-pos[0])+(ZONES[1][1]-pos[1])}}
-function rebuild(){ try{const r=writeModel(M,base); rom=r.rom; $('room').textContent=t('free')+r.free+t('bytes'); $('warn').textContent=''; return true}
+function rebuild(){ if(PLUSM){rom=new Uint8Array(base);return true} try{const r=writeModel(M,base); rom=r.rom; $('room').textContent=t('free')+r.free+t('bytes'); $('warn').textContent=''; return true}
   catch(e){ $('warn').textContent=t('full'); return false} }
 
 // ---------------------------------------------------------------- reading the drawings and levels of the original game
@@ -289,7 +301,7 @@ function tilemap(sc){ const u=VIEWS[sc]; if(u.stagesel){ const ram=level(+$('sta
 async function receive(file){
   const u=new Uint8Array(await file.arrayBuffer()), e=$('status'); e.dataset.frozen=1;
   const h=await sha1(u);
-  if(h!==SHA_ORIG){ e.className='ko'; e.textContent=(u.length===SIZE&&u[0x143]===0x80)?t('already'):t('wrong'); return }
+  if(h!==SHA_ORIG){ e.className='ko'; e.textContent=((u.length===SIZE||u.length===2*SIZE)&&u[0x143]===0x80)?t('already'):t('wrong'); return }
   orig=u; e.className='ok'; e.textContent=t('good'); $('c1').classList.add('done');
   ['c2','c3','c4'].forEach(i=>$(i).hidden=false); await loadMood() }
 $('f').onchange=e=>e.target.files[0]&&receive(e.target.files[0]);
@@ -298,16 +310,20 @@ const z=$('dropzone'); ['dragenter','dragover'].forEach(n=>z.addEventListener(n,
 z.addEventListener('drop',e=>e.dataTransfer.files[0]&&receive(e.dataTransfer.files[0]));
 
 // ---------------------------------------------------------------- 2. the mood
+let PLUSM=false, plusIPS=null;                    // the Plus edition: played and downloaded as built, not edited
+function showNote(){ const v=$('mood').value; $('moodnote').textContent=t('note')[v in T.en.note?v:'other'] }
 async function loadMood(){
   const v=$('mood').value, f='patches/Batman-DX'+(v==='dx'?'':'-'+v)+'.ips';
   const ips=new Uint8Array(await (await fetch(f)).arrayBuffer());
-  base=applyIPS(orig,ips); M=readModel(base); rom=new Uint8Array(base); picked=-1; renderPalettes(); await showSha(); await boot() }
+  PLUSM=(v==='plus'); plusIPS=PLUSM?ips:null; showNote();
+  base=applyIPS(orig,ips); M=PLUSM?null:readModel(base); rom=new Uint8Array(base); picked=-1;
+  $('c4').hidden=PLUSM; if(!PLUSM)renderPalettes(); await showSha(); await boot() }
 $('mood').onchange=loadMood;
 async function showSha(){ $('sha').textContent=t('checksum')+await sha1(rom) }
 function download(u8,nom){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u8],{type:'application/octet-stream'}));a.download=nom;document.body.appendChild(a);a.click();a.remove()}
 const baseName=()=>'Batman-DX'+($('mood').value==='dx'?'':'-'+$('mood').value)+(same(rom,base)?'':'-custom');
 $('dlrom').onclick=()=>{if(rebuild())download(rom,baseName()+'.gbc')};
-$('dlips').onclick=()=>{if(rebuild())download(makeIPS(orig,rom),baseName()+'.ips')};
+$('dlips').onclick=()=>{if(PLUSM){download(plusIPS,'Batman-DX-plus.ips');return} if(rebuild())download(makeIPS(orig,rom),baseName()+'.ips')};
 
 // ---------------------------------------------------------------- 3. the emulator
 const W=WasmBoy.WasmBoy, st={UP:false,RIGHT:false,DOWN:false,LEFT:false,A:false,B:false,SELECT:false,START:false};

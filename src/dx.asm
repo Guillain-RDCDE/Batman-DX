@@ -6,7 +6,7 @@
 ;  - scenery: one "tile -> palette" table per scene, copied to RAM (wTab). Attributes are written
 ;      * all at once each time the screen is turned back on (6 places, rst $08),
 ;      * on the fly in the screen command runner ($0EF9), the only path while the screen is on.
-;
+;  - characters: the palette (bits 0-2) is written into the pose data by tools/patch_obj.py;
 ;    boss flashing (OBP1) becomes "palette 7-p".
 ;  - on a monochrome Game Boy, all added code is skipped (wIsCGB = 0).
 
@@ -26,20 +26,34 @@ DEF wScene   EQU $C521             ; current scene (index into SceneTable)
 DEF wCnt     EQU $C522
 DEF wShine   EQU $C523
 DEF wTab     EQU $C600             ; tile -> attribute table of the current scene (256 bytes)
-; status bar and sky gradient (color hardware, levels): the game never touches C524-C5FF
+; status bar and sky gradient (color console, levels): area C524-C5FF, never touched by the game
 DEF wDx      EQU $C524             ; 1 = line effects active in this scene
 DEF wStep    EQU $C525             ; next gradient step
 DEF wGrad    EQU $C526             ; 2 bytes: gradient steps of the scene (0 = none)
 DEF wPalXi   EQU $C528             ; index of palette X (icon and gauge) for rBCPS, auto-increment
 DEF wPalX    EQU $C530             ; 8 bytes: the scenery colors of palette X
+IF PLUS                            ; Plus edition: a step = line, palette index, target register, 4 bytes
+DEF wGradBuf EQU $C580
+ELSE
 DEF wGradBuf EQU $C540             ; gradient steps of the scene (3 bytes each, $FF at the end)
-DEF wNight    EQU $C570             ; line 15 work in bank EXTRA_BANK: bit 0 = night falls (3-1), bit 1 = bar to be armed
+ENDC
+DEF wNight    EQU $C570             ; line 15 work in bank EXTRA_BANK: bit 0 = night falls (3-1), bit 1 = bar to arm, bit 2 = living colors, bit 3 = slow scrolling
 DEF wPhase   EQU $C571             ; current night step ($FF = to be set)
+DEF wMode    EQU $C542             ; Plus edition: 1 = LevelPatch is called for a broken block (cell in HL)
+DEF wRemnant   EQU $C543             ; Plus edition: tile left by the broken block
+DEF wLifePtr  EQU $C540             ; Plus edition: address of the living colors table (gradient area of the published edition, free here)
+DEF wLife     EQU $C572             ; Plus edition: frame counter, step (0-63) of the living colors, table address (2 bytes)
 DEF rSTAT    EQU $FF41
 DEF rLYC     EQU $FF45
 DEF rLY      EQU $FF44
+DEF LEVEL_BANK EQU 9                ; Plus edition: scenery added to the levels
+DEF GSTEP EQU 3+4*PLUS              ; size of a gradient step (Plus: line, index, target register, 4 bytes)
+DEF wSlow     EQU $C544             ; Plus edition: slow scrolling (last value of $FF97, 2-byte total)
+DEF wTplSize    EQU $C547             ; Plus edition: size of a template block (0 = 256)
+DEF wFar     EQU $C548             ; Plus edition: reading routine for bank FAR_BANK, copied here (40 bytes at most)
+DEF FAR_BANK EQU 10
 DEF HUD_LINE EQU 143              ; last visible line: the bar gets its colors back during its horizontal blank.
-                                   ; Done before line 145, which the game waits for to turn the screen off ($0EB8).
+                                   ; Done before line 145, which the game polls to turn the screen off ($0EB8).
 
 ; ---------------------------------------------------------------- hooks
 SECTION "hook_boot", ROM0[$0100]
@@ -108,7 +122,7 @@ SECTION "hook_obj", ROM0[$100E]
 
 IF HUD_ON
 SECTION "dxfix", ROM0[$0018]              ; rst $18-$38 vectors: empty ($FF) in the game, never called
-; The game resets its split line (15) after each frame's work: not while the line chain is running
+; The game sets its split line (15) back after its frame work: not while our line chain is running
 FixLyc:
     ld a, [wDx]
     and a
@@ -123,8 +137,8 @@ FixLyc:
 DxFixEnd:
     ASSERT DxFixEnd <= $0040
 
-SECTION "dxnight", ROM0[$0028]             ; rst $28-$38 vectors: empty ($FF) in the game, never called
-; Line 15: if night falls in this level, go through bank EXTRA_BANK to advance one step; then the chain.
+SECTION "dxnight", ROM0[$0028]             ; rst vectors $28-$38: empty ($FF) in the game, never called
+; Line 15: if night falls in this level, go through bank EXTRA_BANK to move one step; then the chain.
 NightStep:
     ld a, [wNight]
     and a
@@ -150,11 +164,11 @@ NightDone:
     ASSERT @ <= $0010
 
 SECTION "dxstat", ROM0[$0061]
-; Line interrupt: only two branches of the game's handler ($0E0D) are hooked, AF already pushed.
+; Line interrupt: we only hook two branches of the game's handler ($0E0D), AF already pushed.
 ; The game's own line effects (level openings, title cards) therefore keep their exact timing.
-; Normal level: the game splits the screen at line 15 (fixed bar above, scrolling scenery below). In addition, on
-; color hardware: at line 15 palette X gets its scenery colors back; then the steps of the sky gradient;
-; then, at the end of the picture, palette X gets the colors of the bar again.
+; Normal level: the game splits the screen at line 15 (fixed bar above, scrolling scenery below). On top of
+; that, on a color console: line 15, palette X gets its scenery colors back; then the sky gradient steps;
+; then, at the end of the picture, palette X takes the bar colors again.
 DxSplit:
     ldh a, [rLYC]
     cp $0F
@@ -163,7 +177,7 @@ DxSplit:
     ldh [$FF43], a
     ld a, [wDx]
     and a
-    jr z, .done
+    jr z, .fin
     push bc
     push hl
     ld a, [wPalXi]
@@ -175,14 +189,18 @@ REPT 8
     ld a, [hl+]
     ldh [c], a
 ENDR
+IF PLUS
+    ld a, LOW(wGradBuf)
+ELSE
     xor a
+ENDC
     ld [wStep], a
     push de
     call NightStep
     pop de
     pop hl
     pop bc
-.done:
+.fin:
     pop af
     reti
 .other:
@@ -195,14 +213,14 @@ ENDR
 .orig:
     ldh a, [$FF97]                 ; not ours: original work
     ldh [$FF43], a
-    jr .done
+    jr .fin
 DxBoss:                            ; Jack's room: the game turns characters off at line 128; palette X is free
     ldh a, [rLCDC]
     and $FD
     ldh [rLCDC], a
     ld a, [wDx]
     and a
-    jr z, DxSplit.done
+    jr z, DxSplit.fin
     push bc
     push de
     push hl
@@ -210,7 +228,7 @@ DxBoss:                            ; Jack's room: the game turns characters off 
     pop hl
     pop de
     pop bc
-    jr DxSplit.done
+    jr DxSplit.fin
 WaitH0:                            ; wait for a horizontal or vertical blank (palettes accessible)
     ldh a, [rSTAT]
     and 2
@@ -220,6 +238,7 @@ HudCols:
     HudColsData
 GaugeTab:
     GaugeData
+IF !PLUS
 GradPtr:                           ; HL = current gradient step (wGradBuf + 3*wStep)
     ld a, [wStep]
     ld l, a
@@ -229,7 +248,26 @@ GradPtr:                           ; HL = current gradient step (wGradBuf + 3*wS
     ld l, a
     ld h, HIGH(wGradBuf)
     ret
-
+ENDC
+IF PLUS
+; End of level loading: the Plus edition adds pieces of scenery (empty cells only, color console).
+LevelPatch:
+    ld a, [wIsCGB]
+    and a
+    jr z, .fin
+    ldh a, [hBank]
+    push af
+    ld a, LEVEL_BANK
+    ldh [hBank], a                 ; first the shadow copy, then the bank
+    ld [$2000], a
+    call LevelDo
+    pop af
+    ldh [hBank], a
+    ld [$2000], a
+.fin:
+    ld a, [$C0C2]                  ; original instruction
+    ret
+ENDC
 DxStatEnd:
     ASSERT DxStatEnd <= $0100
 ENDC
@@ -561,7 +599,7 @@ RowEnd:
     ret
 
 IF SHINE
-; Title screen: a light band sweeps down the letters (color 3 of palettes 2 to 6), every 4 frames
+; Title screen: a light band runs down the letters (color 3 of palettes 2 to 6), every 4 frames
 TitleShine:
     ld a, [wIsCGB]
     and a
@@ -612,7 +650,7 @@ ShineTab:
 ENDC
 
 IF HUD_ON
-; Colors of the bar in palette X (icon, gauge according to energy). Waits until palettes are accessible.
+; Bar colors in palette X (icon, gauge by energy). To be awaited: palettes accessible.
 HudWrite:
     ld a, [$C0C8]
     cp 5
@@ -655,6 +693,30 @@ HudWrite:
 DxStatStep:                        ; one gradient step, or the bar (end of the picture)
     push bc
     push hl
+IF PLUS
+    ; Plus edition: wStep = low byte of the current step's address. Short path: we must arrive DURING the
+    ; horizontal blank of the trigger line (about 80 cycles after it starts), otherwise we wait one more line.
+    ld a, [wStep]
+    ld l, a
+    ld h, HIGH(wGradBuf)
+    ld a, [hl+]
+    cp $FF
+    jr z, .hud
+    ld a, [hl+]                    ; palette index of the step, target register (rBCPD or SCX), then 4 bytes
+    ldh [rBCPS], a
+    ld c, [hl]
+    inc hl
+.w:
+    ldh a, [rSTAT]
+    and 2
+    jr nz, .w
+REPT 4
+    ld a, [hl+]
+    ldh [c], a
+ENDR
+    ld a, l
+    ld [wStep], a
+ELSE
     call GradPtr
     ld a, [hl+]
     cp $FF
@@ -670,6 +732,7 @@ DxStatStep:                        ; one gradient step, or the bar (end of the p
     ld a, [wStep]
     inc a
     ld [wStep], a
+ENDC
     ld a, [hl]                     ; line of the next step (or $FF)
     ld b, a
     cp $FF
@@ -700,10 +763,16 @@ DxStatStep:                        ; one gradient step, or the bar (end of the p
     pop af
     reti
 
-; Next line of the chain. If it has already passed (late interrupt): gradient steps are skipped;
-; the bar is always written.
+; Next line of the chain. If it has already gone by (late interrupt): skip the gradient
+; steps; the bar is always written.
 NextLyc:
+IF PLUS
+    ld a, [wStep]
+    ld l, a
+    ld h, HIGH(wGradBuf)
+ELSE
     call GradPtr
+ENDC
 .nx:
     ld a, [hl+]
     cp $FF
@@ -713,11 +782,18 @@ NextLyc:
     inc a
     cp b
     jr c, ChainEnd.set             ; LY+1 < line: still to come
+IF PLUS
+    ld de, GSTEP-1
+    add hl, de
+    ld a, l
+    ld [wStep], a
+ELSE
     inc hl
     inc hl
     ld a, [wStep]
     inc a
     ld [wStep], a
+ENDC
     jr .nx
 .hud:
     ldh a, [rLY]
@@ -745,7 +821,7 @@ Dx0End:
 
 ; ---------------------------------------------------------------- code and data in bank 6
 SECTION "dx6", ROMX[$4CD9], BANK[6]
-; Applies the current scene: table to RAM, palettes, attributes of both screen maps. Screen off.
+; Sets up the current scene: table in RAM, palettes, attributes of the whole screen memory. Screen off.
 SceneApply:
     ld a, [wScene]
     cp NB_SCENES
@@ -840,8 +916,64 @@ SECTION "dx6b", ROMX[$7636], BANK[6]
     SceneBlocks2
 
 IF HUD_ON
+IF PLUS
+; Broken block: the game puts tile 80 (a corner of a light panel). The Plus edition puts the wall that is behind.
+SECTION "hook_block1", ROMX[$457A], BANK[1]
+    call Remnant1                    ; A = tile to leave in the level (cell HL)
+    jr $458A
+SECTION "hook_block2", ROMX[$45C0], BANK[1]
+    call Remnant2                    ; the same, for the screen
+    jr $45CE
+SECTION "dx1", ROMX[$7BFD], BANK[1]
+Remnant1:
+    ldh a, [$FF9B]
+    and $F0
+    cp $40
+    jr nz, .block
+    ldh a, [$FF9B]                 ; item block: the item (original instructions)
+    sub $10
+    ret
+.block:
+    ld a, $80                      ; gray console, or unknown cell: like the original game
+    ld [wRemnant], a
+    push bc
+    push de
+    push hl
+    ld a, 1
+    ld [wMode], a
+    call LevelPatch
+    xor a
+    ld [wMode], a
+    pop hl
+    pop de
+    pop bc
+IF DEF(TEST_RAM80)
+    ld a, $80
+ELSE
+    ld a, [wRemnant]
+ENDC
+    ret
+Remnant2:
+    ldh a, [$FF9B]
+    and $F0
+    cp $40
+    jr nz, .block
+    ldh a, [$FF9B]
+    sub $10
+    ret
+.block:
+    ld a, [wRemnant]
+    ret
+    ASSERT @ <= $7F00
+SECTION "hook_level", ROM0[$114B]
+    call LevelPatch                ; replaces: ld a,[$C0C2] (end of the level loader $10D5)
+SECTION "hook_size", ROM0[$0148]
+    db $03                         ; 256 KB cartridge (16 banks): banks 8 to 15 are ours
+SECTION "dx4", ROMX[$4000], BANK[EXTRA_BANK]
+ELSE
 SECTION "dx4", ROMX[$65C0], BANK[EXTRA_BANK]
-; A scene is turned back on (screen off): prepare the icon, the gauge and the gradient
+ENDC
+; Screen turned back on (screen off): prepares the icon, the gauge and the gradient
 DxSetup:
     ld a, $FF
     ld [wGradBuf], a
@@ -882,10 +1014,10 @@ DxSetup:
     ld [wNight], a                  ; during the level opening, the scenery keeps its colors in palette X
     ld a, [wPhase]
     bit 7, a
-    jr z, .later
+    jr z, .nojack
     call ArmHud                    ; palette X free in this scenery (Batwing, bell tower, Jack's room): bar armed right away
     call HudWrite
-.later:
+.nojack:
     ld hl, GradList
 .gl:
     ld a, [hl+]
@@ -908,12 +1040,11 @@ DxSetup:
     inc de
     cp $FF
     jr z, .gf
+REPT GSTEP-1
     ld a, [hl+]
     ld [de], a
     inc de
-    ld a, [hl+]
-    ld [de], a
-    inc de
+ENDR
     jr .gc
 .gf:
     ld a, LOW(wGradBuf)
@@ -931,16 +1062,66 @@ DxSetup:
     ld [wPhase], a
     call NightPhase
 .nonight:
+IF PLUS
+    ld hl, LifeList                 ; do colors live in this scenery? (scene, address of its table)
+.ll:
+    ld a, [hl+]
+    cp $FF
+    jr z, .nolife
+    ld b, a
+    ld a, [wScene]
+    cp b
+    jr z, .lok
+    inc hl
+    inc hl
+    jr .ll
+.lok:
+    ld a, [hl+]
+    ld [wLifePtr], a
+    ld a, [hl]
+    ld [wLifePtr+1], a
+    xor a                          ; start again from step 0 at each screen-on (the level start text reads well there)
+    ld [wLife], a
+    ld [wLife+1], a
+IF !DEF(NO_LIFE)
+    ld a, [wNight]
+    or 4                           ; bit 2: signs, lamps, barrels, beacons, flames
+    ld [wNight], a
+ENDC
+.nolife:
+ENDC
+IF PLUS
+    ld a, [wScene]
+    cp PARA_A
+    jr z, .para
+    cp PARA_B
+    jr nz, .nopara
+.para:
+    ldh a, [$FF97]
+    ld [wSlow], a
+    ld a, [wNight]
+    or 8                           ; bit 3: slow scrolling of some bands (Batwing)
+    ld [wNight], a
+.nopara:
+ENDC
     ld a, 1
     ld [wDx], a
     ret
 
-; Night falls: the step depends on the level page ($FF98). At each new step, the colors of the gradient steps
-; slide one notch along the ramp (from yellow to night) and the waves follow. Bank EXTRA_BANK.
+; Night falls: the step depends on the level page ($FF98). At each new step, the colors of the gradient
+; steps slide one notch along the ramp (from yellow towards night) and the waves follow. Bank EXTRA_BANK.
 PhaseCheck:                        ; called at line 15 when wNight is not zero (bit 1: bar to be armed, bit 0: night)
     ld a, [wNight]
     bit 1, a
     call nz, ArmHud
+IF PLUS
+    ld a, [wNight]
+    bit 2, a
+    call nz, Life
+    ld a, [wNight]
+    bit 3, a
+    call nz, Parallax
+ENDC
     ld a, [wNight]
     bit 0, a
     ret z
@@ -964,7 +1145,11 @@ NightPhase:
     push de
     ld hl, NightRamp
     add hl, de
-    ld de, wGradBuf+1
+IF PLUS
+    ld de, wGradBuf+NIGHT_FIRST*GSTEP+GSTEP-4   ; the first color of each nightfall step (from step NIGHT_FIRST on)
+ELSE
+    ld de, wGradBuf+GSTEP-(GSTEP/3)*2      ; the first color of each step (after the line)
+ENDC
     ld b, NIGHT_STEPS
 .c:
     ld a, [hl+]
@@ -972,8 +1157,9 @@ NightPhase:
     inc de
     ld a, [hl+]
     ld [de], a
+REPT GSTEP-1
     inc de
-    inc de
+ENDR
     dec b
     jr nz, .c
     pop de
@@ -1008,7 +1194,7 @@ NightPhase:
     dec b
     jr nz, .f
     ret
-; The Batman icon and the gauge switch to palette X (5 cells of the bar). Outside the drawing of a line.
+; The Batman icon and the gauge switch to palette X (5 cells of the bar). Outside line display.
 ArmHud:
     ld a, [wNight]
     and $FD
@@ -1034,6 +1220,143 @@ ArmHud:
     pop af
     ldh [rVBK], a
     ret
+IF PLUS
+; Living colors: every 8 frames, one step further. Nothing is written to the palettes here: we change the color
+; that line 15 will give back (wPalX, color 0) and those of the first line steps (two colors each).
+Life:
+    ld hl, wLife
+    inc [hl]
+    ld a, [hl+]
+    and 7
+    ret nz
+    ld a, [hl]
+    inc a
+    and 63
+    ld [hl], a
+    ld l, a
+    ld h, 0
+    add hl, hl
+    ld d, h
+    ld e, l
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    ld a, l
+    sub e
+    ld l, a
+    ld a, h
+    sbc d
+    ld h, a                        ; step * 14
+    ld a, [wLifePtr]
+    ld e, a
+    ld a, [wLifePtr+1]
+    ld d, a
+    add hl, de
+    ld a, [hl+]
+    ld [wPalX], a
+    ld a, [hl+]
+    ld [wPalX+1], a
+    ld de, wGradBuf+GSTEP-4        ; the two colors of each of the first three steps
+REPT 3
+REPT 4
+    ld a, [hl+]
+    ld [de], a
+    inc de
+ENDR
+REPT GSTEP-4
+    inc de
+ENDR
+ENDR
+    ret
+    LifeData
+; Slow scrolling (Batwing): a running total of the level scroll ($FF97, signed deltas); line steps aimed at SCX
+; ($43) get total >> k (k = their index: 0 = the game's own scroll, 1 = half, 2 = quarter). The scenery of these
+; bands repeats every 16 or 32 columns: any column of the screen memory shows the right picture there.
+Parallax:
+    ldh a, [$FF97]
+    ld b, a
+    ld hl, wSlow
+    sub [hl]
+    ld [hl], b
+    inc hl
+    ld c, a                        ; C = signed delta
+    ld e, 0
+    bit 7, c
+    jr z, .pos
+    dec e
+.pos:
+    ld a, [hl]
+    add a, c
+    ld [hl+], a
+    ld c, a
+    ld a, [hl]
+    adc a, e
+    ld [hl], a
+    ld b, a                        ; BC = total
+    srl b
+    rr c
+    ld d, c                        ; D = total >> 1
+    srl b
+    rr c                           ; C = total >> 2
+    ld hl, wGradBuf
+.s:
+    ld a, [hl+]
+    cp $FF
+    ret z
+    ld a, [hl+]                    ; index = k
+    ld b, a
+    ld a, [hl+]
+    cp $43
+    jr nz, .n
+    ld a, b
+    and a
+    jr nz, .k1
+    ldh a, [$FF97]
+    jr .w
+.k1:
+    dec a
+    ld a, d
+    jr z, .w
+    ld a, c
+.w:
+REPT 4
+    ld [hl+], a
+ENDR
+    jr .s
+.n:
+REPT 4
+    inc hl
+ENDR
+    jr .s
+; Reads retouches stored in bank FAR_BANK: this code is copied to wFar (RAM) and runs from there.
+FarCode:
+    ld a, FAR_BANK
+    ldh [hBank], a
+    ld [$2000], a
+.l:
+    ld a, [hl+]
+    and a
+    jr z, .fin
+    ld b, a
+    ld a, [hl+]
+    ld e, a
+    ld a, [hl+]
+    ld d, a
+.c:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec b
+    jr nz, .c
+    jr .l
+.fin:
+    ld a, EXTRA_BANK
+    ldh [hBank], a
+    ld [$2000], a
+    ret
+FarCodeEnd:
+    ASSERT FarCodeEnd-FarCode <= 40
+ENDC
 NightWindows:
     NightWindowsData
 NightPages:
@@ -1045,6 +1368,17 @@ NightWaves:
 
 ; Extra retouches (same format as the scene's own), in bank EXTRA_BANK, already selected
 ExtraApply:
+IF PLUS
+    ld hl, FarCode                 ; the reading routine for bank FAR_BANK, copied to RAM at each screen-on
+    ld de, wFar                    ; (the level loader uses it too: added scenery, form 3)
+    ld b, FarCodeEnd-FarCode
+.cp:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec b
+    jr nz, .cp
+ENDC
     ld a, [wScene]
     cp NB_SCENES
     ret nc
@@ -1058,6 +1392,12 @@ ExtraApply:
     ld l, a
     or h
     ret z
+IF PLUS
+    bit 7, h                       ; address + $8000: the retouches are in bank FAR_BANK
+    jr z, .l
+    res 7, h
+    jp wFar
+ENDC
 .l:
     ld a, [hl+]
     and a
@@ -1083,4 +1423,174 @@ ExtraTab:
     ExtraData
 Dx4End:
     ASSERT Dx4End <= $8000
+ENDC
+IF PLUS
+SECTION "dx9", ROMX[$4000], BANK[LEVEL_BANK]
+; Scenery added to the level just loaded (stage $C0C2): list of (address, tile), 0 0 = end.
+; We only write on an EMPTY cell (tile $25) or a scenery one (80-FF): never on a block, an item or a floor.
+LevelDo:
+    ld a, [wMode]
+    and a
+    jp nz, Remnant
+    ld a, [$C0C2]
+    ld b, a
+    ld hl, LevelTab
+.t:
+    ld a, [hl+]
+    and a
+    ret z
+    cp b
+    jr z, .ok
+    inc hl
+    inc hl
+    inc hl
+    jr .t
+.ok:
+    ld a, [hl+]                    ; table form: 0 = list (address, tile), 1 = one byte per level cell
+    ld c, a
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+    ld a, c
+    cp 2                           ; form 2: template (size, then N columns x 16 cells), then a list
+    jr nz, .form
+    call LevelTpl
+    jr .l
+.form:
+    ld a, c
+    cp 3                           ; form 3: list of runs (length, address, cells) in bank FAR_BANK, read by wFar
+    jp z, wFar
+    and a
+    jr z, .l
+    ld de, $CC00
+.dl:
+    ld a, [hl+]
+    and a
+    jr z, .dn
+    ld a, [de]
+    cp $25
+    jr z, .dw
+    cp $80
+    jr c, .dn
+.dw:
+    dec hl
+    ld a, [hl+]
+    ld [de], a
+.dn:
+    inc de
+    ld a, d
+    cp $E0
+    jr nz, .dl
+    ret
+.l:
+    ld a, [hl+]
+    ld e, a
+    ld a, [hl+]
+    ld d, a
+    or e
+    ret z
+    ld a, [de]
+    cp $25
+    jr z, .w
+    cp $80                         ; or on a piece of scenery (tiles 80-FF: no effect on the game, like empty)
+    jr nc, .w
+    inc hl
+    jr .l
+.w:
+    ld a, [hl+]
+    ld [de], a
+    jr .l
+; Template in HL (size, then N columns x 16 cells, column by column like the level): copied over the whole level,
+; cell by cell, where the level has empty (25) or scenery (80-FF), if the template cell is not 0. HL returned after it.
+LevelTpl:
+    ld a, [hl+]
+    ld [wTplSize], a                  ; size of a block: 16 x number of columns (0 = 256)
+    ld de, $CC00
+.block:
+    push hl
+    ld a, [wTplSize]
+    ld c, a
+.cell:
+    ld a, [hl+]
+    and a
+    jr z, .next
+    ld b, a
+    ld a, [de]
+    cp $25
+    jr z, .write
+    cp $80
+    jr c, .next
+.write:
+    ld a, b
+    ld [de], a
+.next:
+    inc de
+    ld a, d
+    cp $E0
+    jr z, .fin
+    dec c
+    jr nz, .cell
+    pop hl
+    jr .block
+.fin:
+    pop hl
+    ld a, [wTplSize]
+    ld c, a
+    ld b, 0
+    and a
+    jr nz, .p
+    inc b
+.p:
+    add hl, bc                     ; HL = just after the template
+    ret
+; Broken block in HL: the wall tile behind it, from the stage's table (otherwise wRemnant keeps 80).
+Remnant:
+    ld d, h
+    ld e, l
+    ld a, [$C0C2]
+    ld b, a
+    ld hl, RemnantTab
+.t:
+    ld a, [hl+]
+    and a
+    ret z
+    cp b
+    jr z, .ok
+    inc hl
+    inc hl
+    jr .t
+.ok:
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+.l:
+    ld a, [hl+]
+    ld c, a
+    ld a, [hl+]
+    ld b, a
+    or c
+    ret z
+    ld a, c
+    cp e
+    jr nz, .n
+    ld a, b
+    cp d
+    jr nz, .n
+    ld a, [hl]
+    ld [wRemnant], a
+    ret
+.n:
+    inc hl
+    jr .l
+RemnantTab:
+    RemnantData
+LevelTab:
+    LevelData
+Dx9End:
+    ASSERT Dx9End <= $8000
+SECTION "dx10", ROMX[$4000], BANK[FAR_BANK]
+    FarExtraData
+    FarLevelData
+Dx10End:
+    ASSERT Dx10End <= $8000
 ENDC
