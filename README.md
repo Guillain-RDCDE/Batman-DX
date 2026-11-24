@@ -108,7 +108,7 @@ Published edition on the left, Plus on the right, at the same moment of the game
 - **Batwing.** Two cities: a distant skyline, drawn for this edition, scrolls at half speed behind the game's own buildings, and thin clouds drift at a quarter speed. In 3-1 the sunset glows under the horizon and night falls over the level; in 3-2 the city is lit.
 - **Cathedral.** Night falls on the stone and the stained glass is lit by the moon. On the empty walls: candles that flicker, saints in niches, Gothic blind arches, cobwebs and cracks.
 - **Bell tower.** Moonlit stone, the moon and stars in the arches, and Gotham far below the floor, its windows twinkling. Only the bell is gold.
-- **Everywhere.** Shots, muzzle flashes and explosions lose the white halo they had: that shade was a very light grey on the Game Boy, hardly visible on its light screen. Items released by blocks are plain shapes (a heart, a pistol, a bat, a round “B”). Enemy bullets are a small glowing pearl. Enemies are one shade brighter on the dark walls and no longer change color between two frames of their animation.
+- **Everywhere.** Shots, muzzle flashes and explosions lose the white halo they had: that shade was a very light grey on the Game Boy, hardly visible on its light screen. Items released by blocks are plain shapes (a heart, a pistol, a bat, a round “B”). Enemy bullets are a small glowing pearl. The bats that circle Batman as a shield are tiny Batman logos, a black bat in a yellow oval. Enemies are one shade brighter on the dark walls and no longer change color between two frames of their animation.
 - **Fixed screens.** Dark dialogue boxes with cream letters, Batcave consoles with green screens and red and amber lights, the Batmobile at night, stars around the title, placed to the dot in mirror image.
 
 From the Batwing stages on, one rule was kept: the game's own foreground drawings are recolored, never replaced. New drawings go on empty walls, in the sky and in the distance.
@@ -245,7 +245,7 @@ ff3a3b8d92a8923a7a5a222c2139a5a58e4cada0  Batman-DX-comic.gbc
 05fb008ad3b99e43bdc60385b0e3b210c87600d3  Batman-DX-pastel.gbc
 28863fef90a8f746df6125be9b24bb8aa6b4cc6f  Batman-DX-night.gbc
 baa0f4e60a8275fde47896a1e35a0c150e3220b0  Batman-DX-green.gbc
-f7f01cc52730872fa7ef0ff0922310feab8fd147  Batman-DX-plus.gbc (Plus edition, 256 KB)
+6f6d28ac11789c339c0fd0e74470549f57a811f4  Batman-DX-plus.gbc (Plus edition, 256 KB)
 ```
 
 ## Building from source
