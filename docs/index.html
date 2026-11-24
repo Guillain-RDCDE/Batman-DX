@@ -168,12 +168,12 @@ const T={fr:{
  edgehelp:"Bords transparents : touchez les points clairs qui font partie du fond (entourés d'or). Résultat en dessous.",
  detect:"Détecter", m0:"reflet fondu", m1:"tout d'un cran", m2:"contour gardé",
  apply:"Appliquer", remove:"Retirer", tile:"Tuile ", retouched:" (retouchée)", full:"Plus de place dans la cartouche pour d'autres retouches : retirez-en une.",
- free:"Place libre pour les retouches : ", bytes:" octets", level:"Étape ", screen:"Écran",
+ plusdrawn:"Ce dessin est déjà redessiné par l'édition Plus : changez plutôt ses couleurs.", free:"Place libre pour les retouches : ", bytes:" octets", level:"Étape ", screen:"Écran",
  labhelp:"Les réglages sont repris dans le jeu et le patch téléchargés.",
  tryit:"Essayer", exportbtn:"Exporter", importlbl:"Importer",
  mood:{dx:"Batman DX (l'édition publiée)",plus:"Batman DX Plus (décors redessinés, cartouche de 256 Ko)",movie:"Film 1989",comic:"Bande dessinée",pastel:"Pastel",night:"Gotham la nuit",green:"Game Boy vert"},
  note:{dx:"Les couleurs de chaque lieu, retouchées une à une. Modifiable dans l'éditeur ci-dessous.",
-  plus:"Gotham la nuit, lieu par lieu : décors ajoutés et redessinés (immeubles, usine, musée, cathédrale, clocher), deux plans qui défilent au Batwing, lumières qui vivent, tirs et objets sans halo, écrans fixes de nuit. Le jeu reste identique. Cartouche agrandie à 256 Ko : cette édition se joue et se télécharge ici, mais ne se modifie pas dans l'éditeur.",
+  plus:"Gotham la nuit, lieu par lieu : décors ajoutés et redessinés (immeubles, usine, musée, cathédrale, clocher), deux plans qui défilent au Batwing, lumières qui vivent, tirs et objets sans halo, écrans fixes de nuit. Le jeu reste identique. Cartouche agrandie à 256 Ko. Modifiable dans l'éditeur ci-dessous, comme les autres.",
   other:"Une autre répartition des couleurs, sur la même base. Modifiable dans l'éditeur ci-dessous."},
  sc:["Écrans de texte, Game Over","Logo et écran-titre","Gotham City (1-1, 2-1)","Usine chimique (1-2, 1-3)","Batman contre Jack (1-B)","Musée Flugelheim (2-2, 2-3)","Batwing, coucher de soleil (3-1)","Batwing, nuit (3-2)","Cathédrale (4-1, 4-2)","Batman contre le Joker (4-B)","Scène : la police","Scène : le Joker","Scène : le Joker à l'écran","Scène : la fin","Scène : la Batmobile","Générique de fin"],
  ob:["Batman","Tirs, objets","Ennemis A","Ennemis B","Ennemis C","Éclat (boss)","Éclat","Éclat"]
@@ -191,12 +191,12 @@ const T={fr:{
  edgehelp:"Transparent edges: tap the light dots that belong to the background (circled in gold). Result below.",
  detect:"Detect", m0:"highlight merged", m1:"all one shade down", m2:"outline kept",
  apply:"Apply", remove:"Remove", tile:"Tile ", retouched:" (retouched)", full:"No room left in the cartridge for more retouches: remove one.",
- free:"Free room for retouches: ", bytes:" bytes", level:"Stage ", screen:"Screen",
+ plusdrawn:"This drawing is already redrawn by the Plus edition: change its colors instead.", free:"Free room for retouches: ", bytes:" bytes", level:"Stage ", screen:"Screen",
  labhelp:"Your settings are carried into the downloaded game and patch.",
  tryit:"Try", exportbtn:"Export", importlbl:"Import",
  mood:{dx:"Batman DX (the published edition)",plus:"Batman DX Plus (redrawn scenery, 256 KB cartridge)",movie:"1989 movie",comic:"Comic book",pastel:"Pastel",night:"Gotham by night",green:"Game Boy green"},
  note:{dx:"The colors of every place, retouched one by one. Editable in the editor below.",
-  plus:"Gotham by night, place by place: added and redrawn scenery (buildings, plant, museum, cathedral, bell tower), two layers scrolling in the Batwing stages, living lights, shots and items without a halo, night cutscenes. The game itself is unchanged. The cartridge grows to 256 KB: this edition can be played and downloaded here, but not changed in the editor.",
+  plus:"Gotham by night, place by place: added and redrawn scenery (buildings, plant, museum, cathedral, bell tower), two layers scrolling in the Batwing stages, living lights, shots and items without a halo, night cutscenes. The game itself is unchanged. The cartridge grows to 256 KB. Editable in the editor below, like the others.",
   other:"Another spread of colors on the same base. Editable in the editor below."},
  sc:["Text screens, Game Over","Logo and title screen","Gotham City (1-1, 2-1)","Chemical plant (1-2, 1-3)","Batman vs Jack (1-B)","Flugelheim Museum (2-2, 2-3)","Batwing, sunset (3-1)","Batwing, night (3-2)","Cathedral (4-1, 4-2)","Batman vs the Joker (4-B)","Scene: the police","Scene: the Joker","Scene: the Joker on screen","Scene: the ending","Scene: the Batmobile","End credits"],
  ob:["Batman","Shots, items","Enemies A","Enemies B","Enemies C","Flash (boss)","Flash","Flash"]
@@ -240,6 +240,12 @@ function makeIPS(a,b){
   while(i<n){ if(a[i]===b[i]){i++;continue}
     let j=i,last=i; while(j<n&&j-i<0xFFFF){ if(a[j]!==b[j])last=j; else if(j-last>8)break; j++ }
     const seg=b.slice(i,last+1); out.push(i>>16,(i>>8)&255,i&255,seg.length>>8,seg.length&255,...seg); i=last+1}
+  // the added half of the cartridge (Plus edition): runs of one byte as RLE records, the rest as plain records (as tools/mkips.py)
+  i=n; const m=b.length;
+  while(i<m){ let j=i; while(j<m&&b[j]===b[i]&&j-i<0xFFFF)j++;
+    if(j-i>=8){ out.push(i>>16,(i>>8)&255,i&255,0,0,(j-i)>>8,(j-i)&255,b[i]); i=j; continue }
+    let k=i; while(k<m&&k-i<0xFFFF){ let r=k; while(r<m&&b[r]===b[k]&&r-k<8)r++; if(r-k>=8)break; k=r }
+    const seg=b.slice(i,k); out.push(i>>16,(i>>8)&255,i&255,seg.length>>8,seg.length&255,...seg); i=k }
   out.push(0x45,0x4F,0x46); return new Uint8Array(out)}
 function fixChecksum(d){
   let s=0; for(let i=0;i<d.length;i++) if(i!==0x14E&&i!==0x14F) s=(s+d[i])&0xFFFF; d[0x14E]=s>>8; d[0x14F]=s&255}
@@ -265,7 +271,7 @@ function writeModel(sc,src){
     if(pos[z]+b.length>ZONES[z][1])z=1-z; if(pos[z]+b.length>ZONES[z][1])throw new Error('full');
     d.set(b,pos[z]); const a=0x4000+(pos[z]-BANK6); d[SCENE_TABLE+2*i]=a&255; d[SCENE_TABLE+2*i+1]=a>>8; pos[z]+=b.length });
   fixChecksum(d); return {rom:d,free:(ZONES[0][1]-pos[0])+(ZONES[1][1]-pos[1])}}
-function rebuild(){ if(PLUSM){rom=new Uint8Array(base);return true} try{const r=writeModel(M,base); rom=r.rom; $('room').textContent=t('free')+r.free+t('bytes'); $('warn').textContent=''; return true}
+function rebuild(){ try{const r=writeModel(M,base); rom=r.rom; $('room').textContent=t('free')+r.free+t('bytes'); $('warn').textContent=''; return true}
   catch(e){ $('warn').textContent=t('full'); return false} }
 
 // ---------------------------------------------------------------- reading the drawings and levels of the original game
@@ -278,7 +284,19 @@ function unpackSheet(v,sorte,i){
 const cacheV={}, cacheN={};
 function originalVideo(sc){ if(!cacheV[sc]){ const v=new Uint8Array(0x2000); v.fill(0x25,0x1800);
     const u=VIEWS[sc]; (u.a||[]).forEach(i=>unpackSheet(v,'a',i)); (u.b||[]).forEach(i=>unpackSheet(v,'b',i)); cacheV[sc]=v } return cacheV[sc] }
-function patchedVideo(sc){ const v=new Uint8Array(originalVideo(sc)); for(const r of M[sc].recs) if(r.addr>=0x8000&&r.addr+r.data.length<=0xA000) v.set(r.data,r.addr-0x8000); return v }
+function patchedVideo(sc){ const v=new Uint8Array(originalVideo(sc)); for(const r of M[sc].recs) if(r.addr>=0x8000&&r.addr+r.data.length<=0xA000) v.set(r.data,r.addr-0x8000);
+  if(PLUSM){ const x=plusExtras(sc); for(const [o,data] of x.v0)v.set(data,o); v.v1=x.v1; v.plusTiles=x.tiles } return v }
+// Plus edition: the extra retouches of a scene (bank 8, or bank 10 when the address has bit 15 set), as the game applies
+// them after the scene's own: writes to video bank 0 or 1 (register $FF4F switches between them).
+const cacheP={};
+function plusExtras(sc){ if(cacheP[sc])return cacheP[sc]; const d=base, o=PX.extraTab+2*sc, w=d[o]|(d[o+1]<<8);
+  const res={v0:[],v1:new Uint8Array(0x2000),tiles:new Set()}; let vbk=0;
+  if(w){ let p=(w&0x8000)?PX.farBank*0x4000+((w&0x7FFF)-0x4000):8*0x4000+(w-0x4000);
+    while(d[p]){ const n=d[p], a=d[p+1]|(d[p+2]<<8), data=d.slice(p+3,p+3+n); p+=3+n;
+      if(a===0xFF4F){vbk=data[0]&1;continue}
+      if(a>=0x8000&&a+n<=0xA000){ if(vbk)res.v1.set(data,a-0x8000); else res.v0.push([a-0x8000,data]);
+        if(a<0x9800)for(let k=a;k<a+n;k+=16)res.tiles.add(((k-0x8000)>>4)|(vbk<<9)) } } }
+  return cacheP[sc]=res }
 function level(id){ if(!cacheN[id]){
     const o=7*0x4000+id*4, mb=7*0x4000+((orig[o]|(orig[o+1]<<8))-0x4000); let p=7*0x4000+((orig[o+2]|(orig[o+3]<<8))-0x4000);
     const ram=new Uint8Array(20*256);
@@ -287,7 +305,21 @@ function level(id){ if(!cacheN[id]){
         for(let k=0;k<8;k++){ const a=orig[p]; if(c&0x80)p++; c=(c<<1)&255; const m=mb+a*4, b=pg*256;
           ram[b+e]=orig[m]; ram[b+(e|0x10)]=orig[m+1]; ram[b+((e+1)&255)]=orig[m+2]; ram[b+(((e+1)&255)|0x10)]=orig[m+3]; e=(e+0x20)&255 }
         e=(e+2)&255 } }
-    cacheN[id]=ram } return cacheN[id] }
+    cacheN[id]=ram } return PLUSM?plusLevel(id,cacheN[id]):cacheN[id] }
+// Plus edition: scenery added to the level just after loading (bank 9; form 3 in bank 10), only on empty (25) or scenery (80-FF) cells
+const STAGE_OF={1:1,2:2,3:3,4:4,5:5,6:6,7:7,8:8,9:9,0x0B:11,0x0C:12};
+function plusLevel(id,src){ const ram=new Uint8Array(src), d=base, st=STAGE_OF[id]; let p=PX.levelTab;
+  const ok=a=>ram[a]===0x25||ram[a]>=0x80, put=(a,t)=>{if(a>=0&&a<ram.length&&ok(a))ram[a]=t};
+  while(d[p]){ if(d[p]!==st){p+=4;continue}
+    const form=d[p+1]; let q=9*0x4000+((d[p+2]|(d[p+3]<<8))-0x4000);
+    if(form===1){ for(let a=0;a<5120;a++)if(d[q+a])put(a,d[q+a]) }
+    else if(form===3){ q=PX.farBank*0x4000+((d[p+2]|(d[p+3]<<8))-0x4000);
+      while(d[q]){ const n=d[q], a=(d[q+1]|(d[q+2]<<8))-0xCC00; for(let k=0;k<n;k++)ram[a+k]=d[q+3+k]; q+=3+n } }
+    else { if(form===2){ const size=d[q]||256; q++;
+        for(let a=0;a<5120;a++){const t=d[q+(a%size)]; if(t)put(a,t)} q+=size }
+      while(d[q]|d[q+1]){ put((d[q]|(d[q+1]<<8))-0xCC00,d[q+2]); q+=3 } }
+    break }
+  return ram }
 const tileAddr=n=>n<128?0x9000+n*16:0x8800+(n-128)*16;
 function pixels(v,n){ const o=tileAddr(n)-0x8000, px=new Uint8Array(64);
   for(let y=0;y<8;y++){const lo=v[o+y*2],hi=v[o+y*2+1];for(let x=0;x<8;x++)px[y*8+x]=((lo>>(7-x))&1)|(((hi>>(7-x))&1)<<1)} return px }
@@ -295,7 +327,7 @@ function encode(px){ const b=[]; for(let y=0;y<8;y++){let lo=0,hi=0;for(let x=0;
 
 function tilemap(sc){ const u=VIEWS[sc]; if(u.stagesel){ const ram=level(+$('stagesel').value), w=320, h=16, c=new Uint8Array(w*h);
     for(let x=0;x<w;x++)for(let y=0;y<h;y++)c[y*w+x]=ram[(x>>4)*256+(x&15)*16+y]; return {w,h,c} }
-  const v=originalVideo(sc), c=new Uint8Array(20*18); for(let y=0;y<18;y++)for(let x=0;x<20;x++)c[y*20+x]=v[0x1800+y*32+x]; return {w:20,h:18,c} }
+  const v=PLUSM?patchedVideo(sc):originalVideo(sc), c=new Uint8Array(20*18); for(let y=0;y<18;y++)for(let x=0;x<20;x++)c[y*20+x]=v[0x1800+y*32+x]; return {w:20,h:18,c} }
 
 // ---------------------------------------------------------------- 1. the ROM
 async function receive(file){
@@ -310,20 +342,21 @@ const z=$('dropzone'); ['dragenter','dragover'].forEach(n=>z.addEventListener(n,
 z.addEventListener('drop',e=>e.dataTransfer.files[0]&&receive(e.dataTransfer.files[0]));
 
 // ---------------------------------------------------------------- 2. the mood
-let PLUSM=false, plusIPS=null;                    // the Plus edition: played and downloaded as built, not edited
+let PLUSM=false, PX=null;                         // the Plus edition: its extra retouches and added scenery, replayed in the preview
 function showNote(){ const v=$('mood').value; $('moodnote').textContent=t('note')[v in T.en.note?v:'other'] }
 async function loadMood(){
   const v=$('mood').value, f='patches/Batman-DX'+(v==='dx'?'':'-'+v)+'.ips';
   const ips=new Uint8Array(await (await fetch(f)).arrayBuffer());
-  PLUSM=(v==='plus'); plusIPS=PLUSM?ips:null; showNote();
-  base=applyIPS(orig,ips); M=PLUSM?null:readModel(base); rom=new Uint8Array(base); picked=-1;
-  $('c4').hidden=PLUSM; if(!PLUSM)renderPalettes(); await showSha(); await boot() }
+  PLUSM=(v==='plus'); showNote();
+  if(PLUSM&&!PX)PX=await (await fetch('patches/Batman-DX-plus.json')).json();
+  base=applyIPS(orig,ips); M=readModel(base); rom=new Uint8Array(base); picked=-1; for(const k in cacheP)delete cacheP[k];
+  renderPalettes(); await showSha(); await boot() }
 $('mood').onchange=loadMood;
 async function showSha(){ $('sha').textContent=t('checksum')+await sha1(rom) }
 function download(u8,nom){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u8],{type:'application/octet-stream'}));a.download=nom;document.body.appendChild(a);a.click();a.remove()}
 const baseName=()=>'Batman-DX'+($('mood').value==='dx'?'':'-'+$('mood').value)+(same(rom,base)?'':'-custom');
 $('dlrom').onclick=()=>{if(rebuild())download(rom,baseName()+'.gbc')};
-$('dlips').onclick=()=>{if(PLUSM){download(plusIPS,'Batman-DX-plus.ips');return} if(rebuild())download(makeIPS(orig,rom),baseName()+'.ips')};
+$('dlips').onclick=()=>{if(rebuild())download(makeIPS(orig,rom),baseName()+'.ips')};
 
 // ---------------------------------------------------------------- 3. the emulator
 const W=WasmBoy.WasmBoy, st={UP:false,RIGHT:false,DOWN:false,LEFT:false,A:false,B:false,SELECT:false,START:false};
@@ -355,10 +388,11 @@ function renderPalettes(){ if(!M)return; const sc=+$('scene').value, q=$('what')
     const ps=$('tilepal'); ps.innerHTML=''; for(let p=0;p<8;p++){const o=document.createElement('option');o.value=p;o.textContent=(p===S.hud?t('statusbar'):t('pal')+p);ps.appendChild(o)}
     draw() }
   $('toolbox').hidden=!(u&&picked>=0); if(u&&picked>=0)toolbox(); rebuild() }
+const tilePixels=(v,n,S)=>(S.tab[n]&8&&v.v1)?pixels(v.v1,n):pixels(v,n);
 function draw(){ const sc=+$('scene').value; if(!VIEWS[sc])return; const S=M[sc], k=tilemap(sc), v=patchedVideo(sc), Z=2, cv=$('preview');
   cv.width=k.w*8; cv.height=k.h*8; cv.style.width=(k.w*8*Z)+'px'; const cx=cv.getContext('2d'), im=cx.createImageData(k.w*8,k.h*8), pc={};
-  for(let ty=0;ty<k.h;ty++)for(let tx=0;tx<k.w;tx++){ const n=k.c[ty*k.w+tx], px=pc[n]||(pc[n]=pixels(v,n));
-    let p=S.tab[n]; if(!VIEWS[sc].stagesel&&false)p=S.hud; const pal=S.bg[p];
+  for(let ty=0;ty<k.h;ty++)for(let tx=0;tx<k.w;tx++){ const n=k.c[ty*k.w+tx], px=pc[n]||(pc[n]=tilePixels(v,n,S));
+    const pal=S.bg[S.tab[n]&7];
     for(let y=0;y<8;y++)for(let x=0;x<8;x++){ const c=pal[px[y*8+x]], o=((ty*8+y)*k.w*8+tx*8+x)*4; im.data[o]=c[0]*255/31; im.data[o+1]=c[1]*255/31; im.data[o+2]=c[2]*255/31; im.data[o+3]=255 } }
   cx.putImageData(im,0,0);
   if(picked>=0){ cx.strokeStyle='#ffd21a'; cx.lineWidth=1; for(let i=0;i<k.c.length;i++) if(k.c[i]===picked) cx.strokeRect((i%k.w)*8+.5,Math.floor(i/k.w)*8+.5,7,7) }
@@ -370,9 +404,11 @@ function findRetouch(sc,n){ return M[sc].recs.find(r=>r.addr===tileAddr(n)&&r.da
 function maskFromRetouch(){ const sc=+$('scene').value, o=pixels(originalVideo(sc),picked), r=findRetouch(sc,picked); mask=new Uint8Array(64);
   if(r){ const v=new Uint8Array(0x2000); v.set(r.data,tileAddr(picked)-0x8000); const px=pixels(v,picked); for(let i=0;i<64;i++)mask[i]=(px[i]===0&&o[i]===0)?1:0 } }
 function toolbox(){ const sc=+$('scene').value; $('tiletitle').textContent=t('tile')+picked.toString(16).toUpperCase().padStart(2,'0')+(findRetouch(sc,picked)?t('retouched'):'');
-  $('tilepal').value=M[sc].tab[picked]; drawZooms() }
+  $('tilepal').value=M[sc].tab[picked]&7;
+  const v=PLUSM?patchedVideo(sc):null, redrawn=PLUSM&&((M[sc].tab[picked]&8)||v.plusTiles.has(((tileAddr(picked)-0x8000)>>4)));
+  $('apply').disabled=$('detect').disabled=!!redrawn; $('warn').textContent=redrawn?t('plusdrawn'):''; drawZooms() }
 function drawZooms(){ const sc=+$('scene').value, S=M[sc], o=pixels(originalVideo(sc),picked), G=[[255,255,255],[170,170,170],[85,85,85],[0,0,0]], map=INSIDE[+$('inside').value];
-  const a=$('zoom').getContext('2d'), b=$('result').getContext('2d'), pal=S.bg[S.tab[picked]], fait=pixels(patchedVideo(sc),picked);
+  const a=$('zoom').getContext('2d'), b=$('result').getContext('2d'), pal=S.bg[S.tab[picked]&7], fait=tilePixels(patchedVideo(sc),picked,S);
   for(let i=0;i<64;i++){ const x=(i&7)*24,y=(i>>3)*24, g=G[o[i]]; a.fillStyle='rgb('+g+')'; a.fillRect(x,y,24,24);
     if(mask[i]){a.strokeStyle='#ffd21a';a.lineWidth=3;a.strokeRect(x+2.5,y+2.5,19,19)}
     const c=pal[fait[i]]; b.fillStyle=hex(c); b.fillRect(x,y,24,24) } }
@@ -389,8 +425,8 @@ $('apply').onclick=()=>{ const sc=+$('scene').value, o=pixels(originalVideo(sc),
   if(!rebuild()){ if(anc)anc.data=sauv; else M[sc].recs.pop(); rebuild(); $('warn').textContent=t('full') }
   toolbox(); draw() };
 $('remove').onclick=()=>{ const sc=+$('scene').value, r=findRetouch(sc,picked); if(r)M[sc].recs.splice(M[sc].recs.indexOf(r),1); mask=new Uint8Array(64); rebuild(); toolbox(); draw() };
-$('tilepal').onchange=()=>{ M[+$('scene').value].tab[picked]=+$('tilepal').value; rebuild(); draw() };
-$('bgpal').onclick=()=>{ const S=M[+$('scene').value]; S.bg[S.tab[picked]][0]=[...S.bg[0][0]]; renderPalettes() };
+$('tilepal').onchange=()=>{ const S=M[+$('scene').value]; S.tab[picked]=(S.tab[picked]&8)|+$('tilepal').value; rebuild(); draw() };   // (bit 3, Plus edition: the video bank, kept)
+$('bgpal').onclick=()=>{ const S=M[+$('scene').value]; S.bg[S.tab[picked]&7][0]=[...S.bg[0][0]]; renderPalettes() };
 $('inside').onchange=drawZooms; $('stagesel').onchange=()=>{draw()};
 $('scene').onchange=()=>{picked=-1;renderPalettes()}; $('what').onchange=renderPalettes;
 $('tryit').onclick=async()=>{ if(rebuild()){await showSha();await boot()} };
@@ -400,7 +436,7 @@ $('exportbtn').onclick=()=>{ const o={format:'batman-dx-settings-2',scenes:M.map
 $('importfile').onchange=async e=>{ const f=e.target.files[0]; if(!f)return; const sauve=JSON.stringify(M);
   try{ const o=JSON.parse(await f.text()); if(!o.scenes||o.scenes.length!==NB_SCENES)throw 0; const born=v=>Math.max(0,Math.min(31,v|0));
     o.scenes.forEach((sc,s)=>{ for(const q of['bg','obj'])for(let p=0;p<8;p++)for(let k=0;k<4;k++)M[s][q][p][k]=sc[q][p][k].map(born);
-      if(sc.tab&&sc.tab.length===256)M[s].tab=sc.tab.map(v=>v&7);
+      if(sc.tab&&sc.tab.length===256)M[s].tab=sc.tab.map(v=>v&(PLUSM?15:7));
       if(sc.retouches)M[s].recs=sc.retouches.filter(r=>r[1].length>0&&r[1].length<256&&r[0]>=0x8000&&r[0]+r[1].length<=0xA000).map(r=>({addr:r[0]|0,data:r[1].map(v=>v&255)})) });
     if(!rebuild())throw 1; picked=-1; renderPalettes(); await showSha(); await boot() }
   catch(err){ M=JSON.parse(sauve); rebuild(); $('warn').textContent='JSON ?' } e.target.value='' };

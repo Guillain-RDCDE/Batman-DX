@@ -105,6 +105,8 @@ The lab page rebuilds, in the browser, what the game does at load time. It unpac
 
 A retouch is one more entry in a scene's list: 16 bytes to write over a tile when the screen turns back on. The published edition leaves room for about 50 more.
 
+For the Plus edition the page also reads two small tables, whose addresses are given by `docs/patches/Batman-DX-plus.json` (written by the build): the extra retouches of each scene (bank 8, or bank 10) and the scenery added to each stage (bank 9, forms 0 to 3, or bank 10). It replays them on top of the original drawings and levels, in both video banks, as the game does when the screen turns back on and when a level is loaded. A tile whose attribute has bit 3 set is drawn from video bank 1; the editor keeps that bit when the palette of a tile is changed. The patch it produces for the Plus edition grows the file to 256 KB exactly like `tools/mkips.py`.
+
 The page does not read bank 4 nor the line effects: its previews show a place without the gradient, the nightfall and the extra retouches of the published edition. Those bytes are left as they are, so the game it produces keeps them.
 
 ## The colors

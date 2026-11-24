@@ -10,8 +10,10 @@ The original game uses four shades of grey. Batman DX gives it color without tou
 
 **Two editions.**
 
-- **Batman DX**, the published edition: the game recolored, place by place. Same 128 KB cartridge. Editable in the lab.
+- **Batman DX**, the published edition: the game recolored, place by place. Same 128 KB cartridge.
 - **Batman DX Plus**: Gotham at night. Scenery added and redrawn, two layers scrolling in the Batwing stages, lights that live, cleaner shots and items. The game itself does not change. It needs a 256 KB cartridge. [See what it adds](#batman-dx-plus).
+
+Both can be played, changed and downloaded in the online lab.
 
 ## The easy way: the online lab
 
@@ -37,7 +39,7 @@ Then try the result in the page, download your own game or patch, and export you
 
 The editor shows and edits the colors and the retouches of each place. It does not preview what the published edition adds on top: the sky gradient, the nightfall, the stained glass and the status bar touches. The game you play in the page or download has them all.
 
-The editor works on the published edition and the five moods. The Plus edition is played and downloaded as it is: its added drawings and effects live outside what the editor reads.
+The editor works on every edition, the Plus edition included. For the Plus edition the preview replays its new drawings and the scenery it adds to the levels. As for the published edition, line effects (gradients, the two scrolling layers, living colors) do not show in the preview; the game has them. Drawings that the Plus edition has already redrawn cannot get transparent edges in the editor (the page says so); their colors can be changed like any other.
 
 <p align="center"><img src="images/editor.png" alt="The editor"></p>
 
