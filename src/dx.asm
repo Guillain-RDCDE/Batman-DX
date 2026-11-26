@@ -50,6 +50,8 @@ DEF LEVEL_BANK EQU 9                ; Plus edition: scenery added to the levels
 DEF GSTEP EQU 3+4*PLUS              ; size of a gradient step (Plus: line, index, target register, 4 bytes)
 DEF wSlow     EQU $C544             ; Plus edition: slow scrolling (last value of $FF97, 2-byte total)
 DEF wTplSize    EQU $C547             ; Plus edition: size of a template block (0 = 256)
+DEF wLogoPal EQU $C581             ; Plus edition, title screen: 1 = the logo golds are in palettes 1, 3-7
+DEF wLogoSave EQU $C582            ; Plus edition, title screen: colors 1-3 of these 6 palettes, saved (36 bytes)
 DEF wFar     EQU $C548             ; Plus edition: reading routine for bank FAR_BANK, copied here (40 bytes at most)
 DEF FAR_BANK EQU 10
 DEF HUD_LINE EQU 143              ; last visible line: the bar gets its colors back during its horizontal blank.
@@ -97,10 +99,17 @@ SECTION "hook_gfxB", ROM0[$0FC1]
     nop
 
 IF SHINE
+IF PLUS
+SECTION "hook_title1", ROM0[$0214]
+    call TitleShineL               ; replaces: ld hl,$CB00 (logo loop) - nothing is added during play
+SECTION "hook_title2", ROM0[$02C6]
+    call TitleShineT               ; replaces: ld hl,$CB00 (title screen loop)
+ELSE
 SECTION "hook_title1", ROM0[$0214]
     call TitleShine                ; replaces: ld hl,$CB00 (logo loop) - nothing is added during play
 SECTION "hook_title2", ROM0[$02C6]
     call TitleShine                ; replaces: ld hl,$CB00 (title screen loop)
+ENDC
 ENDC
 
 SECTION "hook_cmd", ROM0[$0EF9]
@@ -599,6 +608,26 @@ RowEnd:
     ret
 
 IF SHINE
+IF PLUS
+; Plus edition: the title screen work lives in bank EXTRA_BANK (room in bank 0: the metallic gold logo)
+TitleShineL:                       ; logo loop
+    ld b, 1
+    jr TitleCommon
+TitleShineT:                       ; title screen loop
+    ld b, 0
+TitleCommon:
+    ldh a, [hBank]
+    push af
+    ld a, EXTRA_BANK
+    ldh [hBank], a                 ; first the marker, then the bank: safe if an interrupt comes
+    ld [$2000], a
+    call TitleWork
+    pop af
+    ldh [hBank], a
+    ld [$2000], a
+    ld hl, $CB00
+    ret
+ELSE
 ; Title screen: a light band runs down the letters (color 3 of palettes 2 to 6), every 4 frames
 TitleShine:
     ld a, [wIsCGB]
@@ -647,6 +676,7 @@ TitleShine:
     ret
 ShineTab:
     ShineData
+ENDC
 ENDC
 
 IF HUD_ON
@@ -977,6 +1007,10 @@ ENDC
 DxSetup:
     ld a, $FF
     ld [wGradBuf], a
+IF PLUS
+    xor a
+    ld [wLogoPal], a               ; the scene palettes were just loaded (the title's)
+ENDC
     ld [wStep], a                  ; chain at rest
     xor a
     ld [wDx], a
@@ -1593,4 +1627,395 @@ SECTION "dx10", ROMX[$4000], BANK[FAR_BANK]
     FarLevelData
 Dx10End:
     ASSERT Dx10End <= $8000
+ENDC
+
+IF PLUS
+; End credits: before THE END, "Thanks for DX version: Enker, Bodom, Rockfordlr".
+; The game's reader (bank 6, $6F2D) reads the text at $6FA6 + offset ($C4D9-$C4DA); there is no room there. From
+; offset $01ED (the first blank line after SUPER CONBI), it reads the rest here: the added block, then the original end.
+; Lines of 10 characters (0-9 = 00-09, A-Z = 0A-23, dash 24, space 25, dot 90), $80 = blank line, $81 = end.
+DEF CREDIT_SPLIT EQU $01ED
+SECTION "hook_credits", ROMX[$6F2D], BANK[6]
+    call CreditAddr                ; replaces: ld de,$6FA6 / adding the offset (17 bytes up to ld a,[de])
+REPT 14
+    nop
+ENDR
+SECTION "dxcredits", ROMX[$7F42], BANK[6]
+CreditAddr:                        ; DE = address of the next character; HL kept
+    ld a, [$C4DA]
+    ld d, a
+    ld a, [$C4D9]
+    ld e, a
+    push hl
+    ld hl, $6FA6
+    ld a, d
+    cp HIGH(CREDIT_SPLIT)
+    jr c, .ok
+    jr nz, .next
+    ld a, e
+    cp LOW(CREDIT_SPLIT)
+    jr c, .ok
+.next:
+    ld hl, CreditTail - CREDIT_SPLIT
+.ok:
+    add hl, de
+    ld d, h
+    ld e, l
+    pop hl
+    ret
+CreditTail:
+    db $80,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$1D,$11,$0A,$17,$14
+    db $1C,$25,$0F,$18,$1B,$0D,$21,$25,$1F,$0E,$1B,$1C,$12,$18,$17,$24
+    db $24,$24,$24,$24,$24,$24,$24,$24,$24,$80,$0E,$17,$14,$0E,$1B,$25
+    db $25,$25,$25,$25,$0B,$18,$0D,$18,$16,$25,$25,$25,$25,$25,$1B,$18
+    db $0C,$14,$0F,$18,$1B,$0D,$15,$1B,$80,$80,$80,$80,$80,$80,$80,$80
+    db $80,$80,$80,$80,$80,$80,$80,$80,$80,$80,$80,$80,$80,$25,$1D,$11
+    db $0E,$25,$0E,$17,$0D,$25,$25,$80,$80,$80,$19,$1B,$0E,$1C,$0E,$17
+    db $1D,$0E,$0D,$25,$25,$25,$25,$25,$0B,$22,$25,$25,$25,$25,$80,$EC
+    db $EE,$F0,$F2,$F4,$F6,$F8,$FA,$FC,$FE,$ED,$EF,$F1,$F3,$F5,$F7,$F9
+    db $FB,$FD,$FF,$80,$81
+CreditEnd:
+    ASSERT CreditEnd <= $8000
+ENDC
+
+IF PLUS
+IF SHINE
+; Title screen (Plus edition). B = 1: logo loop; B = 0: title screen loop.
+; Spinning logo in "metallic gold": each row of logo cells has its own palette (attr_plus,
+; in the workshop). During the logo, palettes 1 and 3 to 7 (signature, letters, stars of the title, not shown yet)
+; receive golds, light at the top to amber at the bottom, with a rebound of light at the bottom; for the title they get their
+; colors back. Done during vertical blank, interrupts off (the game changes SCY on every line of the logo).
+SECTION "dxtitle", ROMX[$7D30], BANK[EXTRA_BANK]
+TitleWork:
+    ld a, b
+    cp 2
+    jp z, CutVie                   ; B = 2: every frame (vertical blank interrupt), Batcave screens
+    ld a, [wIsCGB]
+    and a
+    ret z
+    ld a, [wScene]
+    dec a
+    ret nz                         ; scene 1 = logo and title
+    ld a, b
+    and a
+    jr nz, .logo                   ; logo loop
+    ldh a, [$FF42]
+    and a
+    jr z, .fade                   ; title loop, logo frame (logo / title crossfade: every other frame): the golds
+    ld a, [wLogoPal]               ; title frame: its colors
+    and a
+    jp z, .shine
+    ldh a, [rLY]
+    sub 144
+    cp 7
+    ret nc                         ; not at the start of vertical blank: next frame
+    di
+    ld hl, wLogoSave
+    ld c, $80 + 1*8 + 2
+    call .write
+    ld c, $80 + 3*8 + 2
+    ld b, 5
+.lr:
+    push bc
+    call .write
+    pop bc
+    ld a, c
+    add a, 8
+    ld c, a
+    dec b
+    jr nz, .lr
+    ei
+    xor a
+    ld [wLogoPal], a
+    jp .shine
+.fade:
+    ld a, [wLogoPal]
+    and a
+    ret nz
+    ldh a, [rLY]
+    sub 144
+    cp 7
+    ret nc
+    jr .gold
+.logo:
+    ld a, [wLogoPal]               ; logo loop: load the golds once, at the start of a vertical blank
+    and a
+    ret nz
+    call .vbl
+.gold:
+    di
+    ld hl, LogoGold
+    ld de, wLogoSave
+    ld c, $80 + 1*8 + 2            ; palette 1, color 1
+    call .pal
+    ld c, $80 + 3*8 + 2
+    ld b, 5                        ; palettes 3 to 7
+.lg:
+    push bc
+    call .pal
+    pop bc
+    ld a, c
+    add a, 8
+    ld c, a
+    dec b
+    jr nz, .lg
+    ei
+    ld a, 1
+    ld [wLogoPal], a
+    ret
+.vbl:                              ; wait for the start of vertical blank (once per palette change)
+    ldh a, [rLY]
+    cp 144
+    jr nz, .vbl
+    ret
+.pal:                              ; C = index (color 1): saves the 6 bytes at DE, writes 6 bytes from HL
+    push bc
+    ld b, 6
+.pg:
+    ld a, c
+    and $3F
+    ldh [rBCPS], a                 ; reading: no auto-increment
+    ldh a, [rBCPD]
+    ld [de], a
+    inc de
+    inc c
+    dec b
+    jr nz, .pg
+    pop bc
+.write:                             ; C = index (color 1): writes 6 bytes from HL
+    ld a, c
+    ldh [rBCPS], a
+REPT 6
+    ld a, [hl+]
+    ldh [rBCPD], a
+ENDR
+    ret
+.shine:
+    ld hl, wShine
+    inc [hl]
+    ld a, [hl]
+    and $03
+    jr nz, .fin
+    ld a, [hl]
+    rrca
+    rrca
+    and $0F                        ; step 0-15
+    ld c, a
+    add a, a
+    add a, a
+    add a, c
+    add a, a                       ; x10
+    ld c, a
+    ld b, 0
+    ld hl, TitleEclatTab
+    add hl, bc
+    ld c, $80 + 2*8 + 6
+    ld b, 5
+.l:
+    ldh a, [$FF41]
+    and $02
+    jr nz, .l                      ; wait for an HBlank or VBlank (palettes accessible)
+    ld a, c
+    ldh [rBCPS], a
+    ld a, [hl+]
+    ldh [rBCPD], a
+    ld a, [hl+]
+    ldh [rBCPD], a
+    ld a, c
+    add a, 8
+    ld c, a
+    dec b
+    jr nz, .l
+.fin:
+    ret
+TitleEclatTab:
+    ShineData
+LogoGold:                          ; palettes 1, 3, 4, 5, 6, 7: colors 1 (emblem black), 2 (outline), 3 (gold)
+    db $43,$00,$D6,$05,$7F,$23,$43,$00,$D5,$09,$DF,$53
+    db $43,$00,$51,$01,$BC,$0E,$43,$00,$0F,$01,$19,$06
+    db $43,$00,$EE,$00,$75,$01,$43,$00,$73,$05,$5B,$0E
+DxTitleEnd:
+    ASSERT DxTitleEnd <= $8000
+ENDC
+ENDC
+
+IF PLUS
+; Batcave (still screens 10 and 12: the police at the start, the Joker on screen): the lights live.
+; Every frame, at the start of vertical blank
+; (interrupt, outside levels only: $0CF6): every 4 frames, one step out of 32. Palette 5: amber and red
+; dots blinking at their own pace. (Green screens and cyan gauges were tried and left still.)
+; All 4 colors of the palette are rewritten.
+DEF wCutCnt EQU $C5B0
+SECTION "hook_vbl", ROM0[$0CF6]
+    call VblDx                     ; replaces: call $1818 (only done outside levels: $FF9A = 0)
+SECTION "dxvbl", ROM0[$0000]       ; (rst $00 vector, never called: $FF in the game)
+VblDx:
+    call $1818
+    ld b, 2
+    jp TitleCommon                 ; bank EXTRA_BANK, TitleWork with B = 2 (returns HL = $CB00: no effect here)
+SECTION "dxcutscene", ROMX[$7B00], BANK[EXTRA_BANK]
+CutVie:
+    ld a, [wIsCGB]
+    and a
+    ret z
+    ld a, [wScene]
+    cp 10
+    jr z, .bat
+    cp 12
+    jr z, .bat
+    cp 15
+    ret nz
+    call CutStars                  ; fixed stars under the text (sprites behind the background)
+    ld hl, CutDescG                ; the credits (scene 15), twinkling stars (palettes 5 and 6)
+    ld b, 2
+    jr .ok
+.bat:
+    ld hl, CutDesc
+    ld b, 1                        ; only palette 5 lives (red and amber dots);
+                                   ; green screens and gauges stay still
+.ok:
+    push hl
+    push bc
+    ld hl, wCutCnt
+    inc [hl]
+    ld a, [hl]
+    and 3
+    jr z, .step
+    pop bc
+    pop hl
+    ret
+.step:
+    ld a, [hl]
+    rrca
+    rrca
+    and 31
+    ld e, a                        ; E = step (0-31)
+    pop bc
+    pop hl
+.p:
+    ld a, [hl+]
+    ldh [rBCPS], a                 ; palette, color 0, auto-increment
+    ld a, [hl+]
+    ld c, a
+    ld a, [hl+]
+    push hl
+    ld h, a
+    ld l, c                        ; HL = step table of this palette
+    ld d, 0
+    add hl, de
+    ld a, [hl]                     ; state
+    pop hl
+    push hl
+    ld c, a
+    add a, a
+    add a, a
+    add a, a                       ; x8 bytes per state
+    ld c, a
+    ld a, [hl+]
+    ld h, [hl]
+    add a, c
+    ld l, a
+    jr nc, .nc
+    inc h
+.nc:
+    ld c, 8
+.w:
+    ld a, [hl+]
+    ldh [rBCPD], a
+    dec c
+    jr nz, .w
+    pop hl
+    inc hl
+    inc hl
+    dec b
+    jr nz, .p
+    ret
+CutDesc:                           ; palette index, step table, states
+    db $80 + 5*8
+    dw CutP5, CutS5
+CutP5:
+    db $00,$00,$01,$03,$02,$02,$01,$01,$00,$02,$03,$03,$00,$00,$01,$03
+    db $02,$02,$01,$01,$00,$02,$03,$03,$00,$00,$01,$00,$02,$02,$01,$01
+CutS5:
+    db $5F,$2B,$1F,$19,$6A,$0C,$00,$00,$0B,$0D,$1F,$19,$6A,$0C,$00,$00
+    db $5F,$2B,$6B,$0C,$6A,$0C,$00,$00,$0B,$0D,$6B,$0C,$6A,$0C,$00,$00
+; Credits: 8 fixed stars as sprites behind the background
+; (attribute $80, palette 0 = the moon's): the text scrolls in front. Placed in the slots left empty after the
+; OAM copy ($FE00, vertical blank). Twinkle: in turn, a star takes the faint drawing (72).
+CutStars:
+    ld a, [wCutCnt]
+    rrca
+    rrca
+    rrca
+    and 7
+    ld e, a                        ; E = moment (0-7)
+    ld hl, $FE00
+    ld bc, StarTab
+    ld d, 8
+.lp:
+    ld a, [hl]
+    and a
+    jr nz, .skip
+    ld a, [bc]
+    inc bc
+    ld [hl+], a                    ; y
+    ld a, [bc]
+    inc bc
+    ld [hl+], a                    ; x
+    ld a, [bc]
+    inc bc
+    push af
+    ld a, [bc]
+    inc bc
+    add a, e
+    and 7
+    jr nz, .bright
+    pop af
+    ld a, $72                      ; its turn: the faint drawing
+    jr .t
+.bright:
+    pop af
+.t:
+    ld [hl+], a
+    ld a, $80
+    ld [hl+], a                    ; behind the background, palette 0
+    dec d
+    ret z
+    jr .end
+.skip:
+    inc l
+    inc l
+    inc l
+    inc l
+.end:
+    ld a, l
+    cp $A0
+    jr c, .lp
+    ret
+StarTab:                           ; y, x (OAM coordinates), drawing, twinkle offset
+    db 42, 20, $70, 0
+    db 46, 94, $71, 3
+    db 94, 30, $71, 5
+    db 108, 74, $70, 2
+    db 130, 40, $70, 6
+    db 136, 96, $71, 1
+    db 152, 18, $71, 4
+    db 150, 62, $70, 7
+CutDescG:                          ; credits: stars (palette 5 and palette 6, two paces)
+    db $80 + 5*8
+    dw CutGA, CutGS
+    db $80 + 6*8
+    dw CutGB, CutGS
+CutGA:
+    db $00,$00,$00,$01,$01,$00,$00,$02,$00,$00,$01,$03,$03,$01,$00,$00
+    db $00,$01,$01,$00,$00,$00,$02,$00,$01,$01,$00,$00,$03,$01,$00,$00
+CutGB:
+    db $01,$03,$03,$01,$00,$00,$00,$01,$01,$00,$00,$02,$00,$00,$00,$01
+    db $01,$00,$00,$02,$00,$00,$01,$03,$01,$00,$00,$00,$01,$01,$00,$02
+CutGS:                             ; 0 sky, 1 star core, 2 arms; 4 states: bright, veiled, flash, off
+    db $21,$18,$DF,$5B,$32,$3A,$21,$18,$21,$18,$B6,$42,$4A,$31,$21,$18
+    db $21,$18,$FF,$7F,$D8,$42,$21,$18,$21,$18,$8C,$31,$A5,$24,$21,$18
+CutEnd:
+    ASSERT CutEnd <= $8000
+    ; (section placed lower: the museum extras moved to bank 10)
 ENDC

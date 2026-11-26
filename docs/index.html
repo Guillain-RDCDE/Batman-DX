@@ -266,11 +266,13 @@ function sceneBytes(s){ const b=[...s.tab];
   for(const q of['bg','obj'])for(const pl of s[q])for(const c of pl){const v=c[0]|(c[1]<<5)|(c[2]<<10);b.push(v&255,v>>8)}
   b.push(s.hud); for(const r of s.recs)b.push(r.data.length,r.addr&255,r.addr>>8,...r.data); b.push(0); return b}
 function writeModel(sc,src){
-  const d=new Uint8Array(src), pos=ZONES.map(z=>z[0]); ZONES.forEach(z=>d.fill(0xFF,z[0],z[1]));
+  // Plus edition: the end credits text lives at bank 6 $7F42 (0x1BF42), right after the second zone: keep it.
+  const Z=PLUSM?[ZONES[0],[ZONES[1][0],0x1BF42]]:ZONES;
+  const d=new Uint8Array(src), pos=Z.map(z=>z[0]); Z.forEach(z=>d.fill(0xFF,z[0],z[1]));
   sc.forEach((s,i)=>{ const b=sceneBytes(s); let z=i<10?0:1;
-    if(pos[z]+b.length>ZONES[z][1])z=1-z; if(pos[z]+b.length>ZONES[z][1])throw new Error('full');
+    if(pos[z]+b.length>Z[z][1])z=1-z; if(pos[z]+b.length>Z[z][1])throw new Error('full');
     d.set(b,pos[z]); const a=0x4000+(pos[z]-BANK6); d[SCENE_TABLE+2*i]=a&255; d[SCENE_TABLE+2*i+1]=a>>8; pos[z]+=b.length });
-  fixChecksum(d); return {rom:d,free:(ZONES[0][1]-pos[0])+(ZONES[1][1]-pos[1])}}
+  fixChecksum(d); return {rom:d,free:(Z[0][1]-pos[0])+(Z[1][1]-pos[1])}}
 function rebuild(){ try{const r=writeModel(M,base); rom=r.rom; $('room').textContent=t('free')+r.free+t('bytes'); $('warn').textContent=''; return true}
   catch(e){ $('warn').textContent=t('full'); return false} }
 

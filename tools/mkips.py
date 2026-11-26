@@ -11,13 +11,13 @@ if os.path.exists('build/dx.map'):
         mm=re.search(r'SECTION: \$([0-9a-f]{4})-\$([0-9a-f]{4}) \(\$[0-9a-f]+ bytes\) \["([^"]+)"\]',l)
         if mm: allow.add(mm.group(3))
 HOOK=('hook_',)
-bank=None; bad=[]
+bank=None; bad=[]; rom=True
 if os.path.exists('build/dx.map'):
     for l in open('build/dx.map'):
         mb=re.search(r'bank #(\d+)',l)
-        if mb: bank=int(mb.group(1))
+        if mb: bank=int(mb.group(1)); rom=l.lstrip().startswith('ROM')   # RAM blocks (LOAD) are not in the cartridge
         mm=re.search(r'SECTION: \$([0-9a-f]{4})-\$([0-9a-f]{4}) \(\$[0-9a-f]+ bytes\) \["([^"]+)"\]',l)
-        if mm and not mm.group(3).startswith(HOOK):
+        if mm and rom and not mm.group(3).startswith(HOOK):
             lo,hi=int(mm.group(1),16),int(mm.group(2),16)
             base=lo if bank==0 else bank*0x4000+lo-0x4000
             for k in range(hi-lo+1):
