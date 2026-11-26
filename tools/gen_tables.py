@@ -44,6 +44,23 @@ for ph in range(16):
         v=c15(c); ec+=[v&255,v>>8]
 o.append('DEF SHINE EQU %d'%(1 if T.get('shine') else 0))
 o.append('MACRO ShineData\n'+db(ec)+'\nENDM')
+# Plus edition: logo -> title fade. 16 steps of 64 bytes (the 8 background palettes): 8 for the logo fading out (7/8 to 0),
+# 8 for the title fading in (1/8 to 8/8). The logo = the title palettes with the logo golds (LogoGold, src/dx.asm) in
+# palettes 1, 3-7.
+if PLUS:
+    GOLD=[0x43,0x00,0xD6,0x05,0x7F,0x23,0x43,0x00,0xD5,0x09,0xDF,0x53,0x43,0x00,0x51,0x01,0xBC,0x0E,
+          0x43,0x00,0x0F,0x01,0x19,0x06,0x43,0x00,0xEE,0x00,0x75,0x01,0x43,0x00,0x73,0x05,0x5B,0x0E]
+    title=pals(T.get('bg')); logo=list(title)
+    for i,pn in enumerate((1,3,4,5,6,7)): logo[pn*8+2:pn*8+8]=GOLD[i*6:i*6+6]
+    def dim(b,k):
+        o_=[]
+        for j in range(0,64,2):
+            v=b[j]|(b[j+1]<<8); r,g,bl=v&31,(v>>5)&31,(v>>10)&31
+            v=round(r*k/8)|(round(g*k/8)<<5)|(round(bl*k/8)<<10); o_+=[v&255,v>>8]
+        return o_
+    fd=[]
+    for e in range(16): fd+=dim(logo,7-e) if e<8 else dim(title,e-7)
+    o.append('MACRO FadeData\n'+db(fd)+'\nENDM')
 o.append('MACRO SceneBlocks\n'+'\n'.join(blk[:10])+'\nENDM')
 o.append('MACRO SceneBlocks2\n'+'\n'.join(blk[10:])+'\nENDM')
 def tighten(pe):

@@ -159,7 +159,7 @@ Comparisons run on PyBoy. The game was also run on cycle-accurate Gambatte, in c
 ### What is not verified
 
 - The game on real hardware or a flash cartridge.
-- A full playthrough by a human. Each place was reached by forcing the stage number, the credits by forcing the jump to `0B3A`.
+- A full playthrough of the published edition by a human (the Plus edition has been played to the end). Each place was reached by forcing the stage number, the credits by forcing the jump to `0B3A`.
 - Items released by blocks were seen by placing them by hand in the scenery, not by breaking a block.
 
 ## The Plus edition
@@ -223,13 +223,28 @@ Characters do have a transparent color. In the original drawings of shots, muzzl
 
 A character pose that mixed two palettes changed color from one frame to the next. The Plus edition gives some poses a single palette (`objtile` in `plus.json`), only where the pose is used by that character alone; the moving platforms of the plant get a palette of their own.
 
+### Double speed
+
+On a Game Boy Color the Plus edition switches to CGB double speed at power-on (`DxInit`: `KEY1`, `STOP`). The line work it adds (gradient, nightfall, two layers) took CPU time from the game: in the Batwing stages 2 to 3 % of the frames came late (the game had not finished its frame before vertical blank), none in the original. In double speed no frame comes late on any stage. Two things depend on the clock and are adjusted:
+
+- **The music timer.** The sound driver runs on the timer interrupt (`TAC` 4096 Hz, `TMA` `$BB`: 59.4 Hz). In double speed the timer counts twice as fast, so `SoundTMA` (hooked at bank 2 `$4009`) writes `$76` instead: 138 steps, the same tempo.
+- **The spinning logo and the stage title cards.** The game sets `SCY` on every line from its `LYC` handler. In double speed the write landed in the middle of the line and cut the logo with a vertical seam. `LogoRaster` replaces that branch (`$0E2A`): same computation, the write waits for the end of the line, and the memory writes come after it. On a monochrome Game Boy (`KEY1` reads `$FF`) it does not wait. After the last line, `LYC` goes back to 0, so the chain restarts by itself on a frame the game did not finish (the first frame after power-on used to show the title screen).
+
+### Logo to title fade
+
+The original game goes from the spinning logo to the title by alternating frames of each (`$C1A5` = 0 during that time, `SCY` 0 or `$7C`). On the Game Boy's slow LCD it looked like a fade; on a modern screen it flickers. During that time `TitleFade` (called at vertical blank) sets `SCY` itself: the logo fades out over 32 frames, then the title fades in over 32 frames and stays. The 16 sets of 8 palettes are precomputed (`FadeData`, `tools/gen_tables.py`). Pressing Start during the fade shows the full title at once.
+
+### End credits stars
+
+The statue of the credits is in the window, which slides in; the text scrolls in the background. Stars drawn in the background scrolled with the text, so the Plus edition shows stars only where they can stay still: 10 in the window around the statue and 12 sprites behind the background (attribute `$80`, so the text passes in front of them). The game already uses 28 sprite slots there (cape and signal), which leaves 12. Nothing shows while the statue rises (`WY` ≠ 0); then one star appears every 8 frames (`AppearTab`): a sprite, or a window cell whose blank tile becomes a star.
+
 ### Memory used (Plus edition)
 
-`C540`-`C573` and `C580`-`C5FF`, in the area the original game never writes to: living colors table pointer, broken block mode and remnant, slow scrolling total, template size, the copied `FarCode` routine, nightfall and living colors state, and the line steps (`C580`, seven bytes each).
+`C540`-`C573` and `C580`-`C5FF`, in the area the original game never writes to: living colors table pointer, broken block mode and remnant, slow scrolling total, template size, the copied `FarCode` routine, nightfall and living colors state, and the line steps (`C580`, seven bytes each). Outside levels the same area holds the title screen state (`C581`-`C5A5`, `wFade` at `C5B1`) and the cutscene and credits counters (`C5B0`, `wStarN` `C5B2`, `wSprN` `C5B3`).
 
 ### Verification of the Plus edition
 
-The Plus edition is compared frame by frame with the original on stages 1 to 12, in color and in monochrome, with one change to the comparison: scenery tiles (`$80`-`$FF`) count as empty, since that is exactly how the game treats them. Every stage is identical. The scene at stage 13 shows the same difference as the published edition (the comparison tool cannot follow that animated scene). It runs at most 0.7 % slower than the original on the stages measured (stage 3-1, with its gradient, nightfall and two scrolling layers; the published edition: 0.4 %).
+The Plus edition is compared frame by frame with the original on stages 1 to 12, in color and in monochrome, with one change to the comparison: scenery tiles (`$80`-`$FF`) count as empty, since that is exactly how the game treats them. Every stage is identical. The scene at stage 13 shows the same difference as the published edition (the comparison tool cannot follow that animated scene). In double speed no frame comes late on any of the twelve stages (before double speed, up to 3 % of the frames in the Batwing stages).
 
 ## Rebuilding
 

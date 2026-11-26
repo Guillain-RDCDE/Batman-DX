@@ -52,6 +52,7 @@ DEF wSlow     EQU $C544             ; Plus edition: slow scrolling (last value o
 DEF wTplSize    EQU $C547             ; Plus edition: size of a template block (0 = 256)
 DEF wLogoPal EQU $C581             ; Plus edition, title screen: 1 = the logo golds are in palettes 1, 3-7
 DEF wLogoSave EQU $C582            ; Plus edition, title screen: colors 1-3 of these 6 palettes, saved (36 bytes)
+DEF wFade    EQU $C5B1             ; Plus edition, title screen: logo -> title fade (0 = not started, 1-63 running, 64 = done)
 DEF wFar     EQU $C548             ; Plus edition: reading routine for bank FAR_BANK, copied here (40 bytes at most)
 DEF FAR_BANK EQU 10
 DEF HUD_LINE EQU 143              ; last visible line: the bar gets its colors back during its horizontal blank.
@@ -282,6 +283,12 @@ DxStatEnd:
 ENDC
 
 ; ---------------------------------------------------------------- code in bank 0
+IF PLUS
+SECTION "hook_logoraster", ROM0[$0E2A]
+    jp LogoRaster                  ; replaces: push hl / ld a,[$C0B8]
+SECTION "hook_sound", ROMX[$4009], BANK[2]
+    call SoundTMA                    ; replaces: ld a,$BB / ld [hl+],a
+ENDC
 SECTION "dx0", ROM0[$3B55]
 DxInit:
     ld a, e
@@ -291,10 +298,126 @@ DxInit:
     inc a
 .mono:
     ld [wIsCGB], a
+IF PLUS
+; Double speed: on a Game Boy Color the Plus edition runs in CGB double speed (the CPU runs twice as fast; picture and
+; sound do not change). The work added on every line (parallax, nightfall, gradient) took time from the game: in the
+; Batwing stages 2 to 3 % of the frames came late, none in the original. The music timer is adjusted to match
+; (SoundTMA).
+    and a
+    jr z, .slow
+    ldh a, [$FF4D]
+    rlca
+    jr c, .slow                    ; already in double speed
+    ld a, $30
+    ldh [$FF00], a
+    ld a, 1
+    ldh [$FF4D], a
+    xor a
+    ldh [$FFFF], a
+    stop
+.slow:
+ENDC
     xor a
     ld [wScene], a
     ld [$C0E3], a                  ; original instruction
     ret
+IF PLUS
+LogoRaster:                        ; replaces the logo branch ($0E2A-$0E61) of the game's line handler
+; Spinning logo and stage title cards: on every line, SCY for the next line. In double speed the game wrote it in the
+; middle of the line (a vertical seam across the logo): wait for the end of the line. Same computation as the game;
+; the memory writes come after SCY. Monochrome Game Boy ($FF4D = $FF): no wait, SCY is written within one cycle of
+; the original timing.
+    push hl
+    ld a, [$C0B8]
+    and a
+    jr nz, .b                      ; blank lines at the top
+    ld a, [$C0BA]
+    cp $90
+    jr nc, .c                      ; blank lines at the bottom
+    ld h, a
+    ld a, [$C0BB]
+    ld l, a
+    ld a, [$C0B9]
+    add a, l
+    ld l, a                        ; L = new fraction
+    ld a, [$C0BC]
+    adc a, h
+    ld h, a                        ; H = new picture line
+    ldh a, [$FF4D]
+    inc a
+    jr nz, .w1                     ; color console (double speed): wait for the end of the line
+.ok1:
+    ldh a, [$FF45]
+    cpl
+    inc a
+    add a, h
+    ldh [$FF42], a                 ; SCY = picture line - LYC
+    ld a, l
+    ld [$C0B9], a
+    ld a, h
+    ld [$C0BA], a
+    jr .fin
+.w1:
+    ldh a, [$FF41]
+    and 2
+    jr nz, .w1                     ; modes 2 and 3 (line being drawn)
+    jr .ok1
+.b:
+    dec a
+    ld l, a
+    ldh a, [$FF4D]
+    inc a
+    jr nz, .w2
+.ok2:
+    ldh a, [$FF45]
+    cpl
+    inc a
+    add a, $90
+    ldh [$FF42], a
+    ld a, l
+    ld [$C0B8], a
+    jr .fin
+.w2:
+    ldh a, [$FF41]
+    and 2
+    jr nz, .w2
+    jr .ok2
+.c:
+    ldh a, [$FF4D]
+    inc a
+    jr nz, .w3
+.ok3:
+    ldh a, [$FF45]
+    cpl
+    inc a
+    add a, $90
+    ldh [$FF42], a
+.fin:
+    ld hl, $FF45
+    inc [hl]
+    ld a, [hl]
+    cp 145
+    jr c, .fin2
+    ld [hl], 0                     ; last line done: the chain restarts at the top of the next frame, even when the game had
+.fin2:                             ; no time to restart it (first frame after power-on: the title screen flashed)
+    pop hl
+    pop af
+    reti
+.w3:
+    ldh a, [$FF41]
+    and 2
+    jr nz, .w3
+    jr .ok3
+SoundTMA:                            ; replaces: ld a,$BB / ld [hl+],a (bank 2, sound start-up: TMA)
+    ld a, [wIsCGB]                 ; timer at 4096 Hz, 69 steps: 59.4 Hz; in double speed it counts at 8192 Hz:
+    and a                          ; 138 steps for the same tempo
+    ld a, $BB
+    jr z, .w
+    ld a, $76
+.w:
+    ld [hl+], a
+    ret
+ENDC
 
 SceneFromA:                        ; A = graphics sheet number (banks 3-4)
     push af
@@ -1698,7 +1821,11 @@ TitleWork:
     ret nz                         ; scene 1 = logo and title
     ld a, b
     and a
-    jr nz, .logo                   ; logo loop
+    jr nz, .logo0                  ; logo loop
+    ld a, [wFade]
+    dec a
+    cp 63
+    ret c                          ; fade running: the palettes belong to it
     ldh a, [$FF42]
     and a
     jr z, .fade                   ; title loop, logo frame (logo / title crossfade: every other frame): the golds
@@ -1737,6 +1864,9 @@ TitleWork:
     cp 7
     ret nc
     jr .gold
+.logo0:
+    xor a
+    ld [wFade], a                  ; the fade starts over with every logo
 .logo:
     ld a, [wLogoPal]               ; logo loop: load the golds once, at the start of a vertical blank
     and a
@@ -1846,6 +1976,8 @@ IF PLUS
 ; dots blinking at their own pace. (Green screens and cyan gauges were tried and left still.)
 ; All 4 colors of the palette are rewritten.
 DEF wCutCnt EQU $C5B0
+DEF wStarN EQU $C5B2                ; credits: frames since the statue settled (stars appearing)
+DEF wSprN EQU $C5B3                 ; credits: sprite stars already shown
 SECTION "hook_vbl", ROM0[$0CF6]
     call VblDx                     ; replaces: call $1818 (only done outside levels: $FF9A = 0)
 SECTION "dxvbl", ROM0[$0000]       ; (rst $00 vector, never called: $FF in the game)
@@ -1853,6 +1985,80 @@ VblDx:
     call $1818
     ld b, 2
     jp TitleCommon                 ; bank EXTRA_BANK, TitleWork with B = 2 (returns HL = $CB00: no effect here)
+; Logo -> title fade. The original game goes from the logo to the title by alternating frames of each ($C1A5 = 0
+; during that time, SCY 0 / $7C): a fade on the Game Boy's slow LCD, a flicker on a modern screen. Here, during that
+; time, the frame shown no longer depends on the game: the logo fades out (32 frames), then the title fades in (32
+; frames) and stays. Precomputed palettes (FadeData, tools/gen_tables.py): the 8 background palettes, written every
+; 4 frames during vertical blank.
+; Start pressed during the fade: the full title at once. Nothing changes in how the game runs.
+SECTION "dxfade", ROMX[$7600], BANK[EXTRA_BANK]
+TitleFade:
+    ld a, [$C1A5]
+    and a
+    jr z, .trans                   ; logo -> title transition running
+    inc a
+    ret nz                         ; before the transition: nothing
+    ld a, [wFade]                  ; transition over or cut by Start
+    dec a
+    cp 63
+    ret nc
+    ld a, 15                       ; fade cut: the full title
+    call .write
+    ld a, 64
+    ld [wFade], a
+    ret
+.trans:
+    ld a, [wFade]
+    cp 64
+    jr nc, .title                  ; fade done: the title stays
+    inc a
+    ld [wFade], a
+    dec a
+    ld c, a
+    and 3
+    jr nz, .scy
+    ld a, c
+    rrca
+    rrca
+    and $0F                        ; step 0-15
+    call .write
+.scy:
+    ld a, [wFade]
+    cp 33
+    jr nc, .title
+    xor a                          ; frames 1-32: the logo
+    ldh [$FF42], a
+    ret
+.title:
+    ld a, $7C
+    ldh [$FF42], a
+    ret
+.write:                            ; A = step: the 8 background palettes (64 bytes)
+    ld l, a
+    ld h, 0
+REPT 6
+    add hl, hl
+ENDR
+    ld de, FadeTab
+    add hl, de
+    ld a, $80
+    ldh [rBCPS], a
+    ld c, LOW(rBCPD)
+    ld b, 8
+.l:
+REPT 8
+    ld a, [hl+]
+    ldh [c], a
+ENDR
+    dec b
+    jr nz, .l
+    xor a
+    ld [wLogoPal], a               ; no golds to put back: the title then gets its shine again
+    ret
+FadeTab:
+    FadeData
+DxFadeEnd:
+    ASSERT DxFadeEnd <= $7B00
 SECTION "dxcutscene", ROMX[$7B00], BANK[EXTRA_BANK]
 CutVie:
     ld a, [wIsCGB]
@@ -1864,7 +2070,55 @@ CutVie:
     cp 12
     jr z, .bat
     cp 15
+    jr z, .gen
+    dec a
     ret nz
+    jp TitleFade                   ; scene 1: logo -> title fade
+.gen:
+    ldh a, [$FF4A]
+    and a
+    jr z, .settled
+    xor a                          ; the statue is still rising (window not in place): plain sky, no stars
+    ld [wStarN], a
+    ld [wSprN], a
+    ret
+.settled:                            ; one more star
+    ld a, [wStarN]                 ; every 8 frames, 22 in all (AppearTab)
+    cp 22*8
+    jr nc, .all
+    inc a
+    ld [wStarN], a
+    dec a
+    ld c, a
+    and 7
+    jr nz, .all
+    ld a, c
+    rrca
+    and $7C                        ; (frames / 8) x 4 bytes
+    ld l, a
+    ld h, 0
+    ld de, AppearTab
+    add hl, de
+    ld a, [hl+]
+    cp $FF
+    jr nz, .window
+    ld a, [wSprN]                  ; one more sprite star
+    inc a
+    ld [wSprN], a
+    jr .all
+.window:
+    ld e, a                        ; a window cell (around the statue) gets its star
+    ld a, [hl+]
+    ld d, a
+    ldh a, [$FF4F]
+    push af
+    xor a
+    ldh [$FF4F], a
+    ld a, [hl]
+    ld [de], a
+    pop af
+    ldh [$FF4F], a
+.all:
     call CutStars                  ; fixed stars under the text (sprites behind the background)
     ld hl, CutDescG                ; the credits (scene 15), twinkling stars (palettes 5 and 6)
     ld b, 2
@@ -1950,8 +2204,11 @@ CutStars:
     and 7
     ld e, a                        ; E = moment (0-7)
     ld hl, $FE00
+    ld a, [wSprN]
+    and a
+    ret z
+    ld d, a                        ; only the stars already shown
     ld bc, StarTab
-    ld d, 8
 .lp:
     ld a, [hl]
     and a
@@ -1993,14 +2250,43 @@ CutStars:
     jr c, .lp
     ret
 StarTab:                           ; y, x (OAM coordinates), drawing, twinkle offset
-    db 42, 20, $70, 0
-    db 46, 94, $71, 3
-    db 94, 30, $71, 5
-    db 108, 74, $70, 2
-    db 130, 40, $70, 6
-    db 136, 96, $71, 1
-    db 152, 18, $71, 4
-    db 150, 62, $70, 7
+                                   ; (12 stars over the left part, around the signal; the game uses 28 slots)
+    db 22, 12, $70, 0
+    db 26, 78, $71, 3
+    db 46, 94, $70, 6
+    db 56, 16, $71, 1
+    db 68, 82, $70, 4
+    db 78, 38, $71, 7
+    db 90, 96, $70, 2
+    db 102, 20, $71, 5
+    db 108, 60, $70, 0
+    db 120, 88, $71, 3
+    db 132, 28, $70, 6
+    db 144, 72, $71, 1
+AppearTab:                          ; order of appearance (4 bytes): $FF = one more sprite star;
+                                   ; otherwise a window cell address and its drawing (credits stars)
+    db $FF, 0, 0, 0
+    db $21, $9C, $F0, 0
+    db $FF, 0, 0, 0
+    db $05, $9C, $F1, 0
+    db $FF, 0, 0, 0
+    db $66, $9C, $F0, 0
+    db $FF, 0, 0, 0
+    db $A0, $9C, $F1, 0
+    db $FF, 0, 0, 0
+    db $E7, $9C, $F0, 0
+    db $FF, 0, 0, 0
+    db $66, $9D, $F1, 0
+    db $FF, 0, 0, 0
+    db $80, $9D, $F0, 0
+    db $FF, 0, 0, 0
+    db $C7, $9D, $F1, 0
+    db $FF, 0, 0, 0
+    db $23, $9C, $F0, 0
+    db $FF, 0, 0, 0
+    db $20, $9D, $F1, 0
+    db $FF, 0, 0, 0
+    db $FF, 0, 0, 0
 CutDescG:                          ; credits: stars (palette 5 and palette 6, two paces)
     db $80 + 5*8
     dw CutGA, CutGS
